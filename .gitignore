@@ -1,0 +1,36 @@
+# =====================================================================
+# .gitignore do monorepo SGI
+# Governança: o que está aqui NUNCA entra em controle de versão.
+# Três categorias: artefatos de build, dados locais e SEGREDOS.
+# =====================================================================
+
+# ----- .NET: artefatos de compilação -----
+bin/
+obj/
+*.user
+
+# ----- Banco de dados local (SQLite) -----
+# Dado local de desenvolvimento jamais é versionado.
+banco.db
+banco.db-shm
+banco.db-wal
+
+# ----- SEGREDOS (a linha mais importante deste arquivo) -----
+# Variáveis de ambiente locais do frontend e quaisquer
+# arquivos de configuração com credenciais.
+.env
+.env.*
+!.env.example
+appsettings.*.Local.json
+
+# ----- Node / React (entra em cena na Etapa 6) -----
+node_modules/
+dist/
+
+# ----- IDEs e sistema operacional -----
+.vs/
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

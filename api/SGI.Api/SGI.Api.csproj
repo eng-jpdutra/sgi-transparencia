@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Arquivo de projeto da API do SGI.
+    Sdk "Microsoft.NET.Sdk.Web" = projeto web ASP.NET Core (inclui o servidor Kestrel).
+  -->
+
+  <PropertyGroup>
+    <!-- Versão do runtime: .NET 8 (LTS, suporte até nov/2026). -->
+    <TargetFramework>net8.0</TargetFramework>
+
+    <!-- ImplicitUsings: importa automaticamente os "using" mais comuns (System, Linq, etc). -->
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!--
+      Nullable habilitado = tipagem forte de verdade.
+      O compilador nos OBRIGA a declarar quando algo pode ser nulo (string?)
+      e avisa quando esquecemos de tratar um possível nulo.
+      Isso elimina em tempo de compilação a exceção mais comum do C#:
+      NullReferenceException.
+    -->
+    <Nullable>enable</Nullable>
+
+    <!--
+      Avisos viram erros de compilação.
+      Postura "Fail Fast" aplicada ao próprio build: código com aviso
+      não compila, portanto nunca chega em produção.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!--
+    Nenhum pacote NuGet ainda — de propósito.
+    Cada etapa adiciona somente as dependências que de fato usa:
+      Etapa 2: Microsoft.EntityFrameworkCore.Sqlite + Design (e Npgsql p/ PROD)
+      Etapa 3: Microsoft.AspNetCore.Authentication.JwtBearer + BCrypt.Net-Next
+    Dependência sem uso é superfície de ataque e peso de manutenção.
+  -->
+
+</Project>

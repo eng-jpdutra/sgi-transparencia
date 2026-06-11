@@ -1,0 +1,17 @@
+{
+  // Este arquivo só é usado pela SUA máquina, ao rodar "dotnet run"
+  // ou pelo Visual Studio/Rider. Não vai para produção.
+
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      // Porta fixa local: o frontend (Etapa 6) apontará para ela via .env.
+      "applicationUrl": "http://localhost:5180",
+      // Define o ambiente como Development -> carrega o
+      // appsettings.Development.json (SQLite, logs detalhados).
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
