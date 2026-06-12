@@ -49,6 +49,15 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <!-- [Etapa 3] Middleware de autenticação por JWT Bearer:
+         valida assinatura, emissor, público e expiração de cada
+         token recebido no cabeçalho Authorization. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.11" />
+
+    <!-- [Etapa 3] BCrypt: hash de senhas. Algoritmo adaptativo
+         (deliberadamente lento) com sal embutido — o padrão de
+         mercado para armazenamento de credenciais. -->
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
   </ItemGroup>
 
 </Project>

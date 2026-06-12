@@ -49,6 +49,14 @@ public class Usuario : EntidadeBase
     public DateTime? BloqueadoAte { get; set; }
 
     /// <summary>
+    /// true = a senha atual é provisória (definida por um administrador
+    /// ou pelo seed inicial) e o usuário DEVE trocá-la no próximo login.
+    /// O frontend recebe este flag na resposta do login e força o fluxo
+    /// de troca antes de liberar o restante do sistema.
+    /// </summary>
+    public bool DeveTrocarSenha { get; set; }
+
+    /// <summary>
     /// Perfis (papéis de acesso) atribuídos a esta conta.
     /// Relação N:N com Perfil, através da entidade UsuarioPerfil.
     /// </summary>

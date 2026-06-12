@@ -13,8 +13,13 @@
 // =====================================================================
 
 // "using" = importação dos namespaces utilizados neste arquivo.
-using Microsoft.EntityFrameworkCore;   // UseSqlite, AddDbContext
-using SGI.Api.Persistencia;            // ContextoDados
+using System.Text;                                      // Encoding (chave JWT)
+using Microsoft.AspNetCore.Authentication.JwtBearer;    // esquema Bearer
+using Microsoft.EntityFrameworkCore;                    // UseSqlite, AddDbContext
+using Microsoft.IdentityModel.Tokens;                   // validação do token
+using SGI.Api.Persistencia;                             // ContextoDados, SemeadorDados
+using SGI.Api.Rotas;                                    // MapearRotasAutenticacao
+using SGI.Api.Servicos;                                 // ServicoToken
 
 // ---------------------------------------------------------------------
 // FASE 1: O "builder" — configuração e registro de serviços.
@@ -50,7 +55,51 @@ var connectionString = builder.Configuration.GetConnectionString("BancoSgi")
 builder.Services.AddDbContext<ContextoDados>(opcoes =>
     opcoes.UseSqlite(connectionString));
 
-// [ETAPA 3] Autenticação JWT + Autorização (RBAC) entrarão aqui.
+// ---------------------------------------------------------------------
+// [ETAPA 3] Segurança: Autenticação (JWT) + Autorização (RBAC).
+// ---------------------------------------------------------------------
+// FAIL FAST da chave: sem segredo configurado, a aplicação não sobe.
+var chaveJwt = builder.Configuration["Jwt:ChaveSecreta"]
+    ?? throw new InvalidOperationException(
+        "Configuração 'Jwt:ChaveSecreta' ausente. Em DEV ela vem do " +
+        "appsettings.Development.json; em PROD, da variável de ambiente " +
+        "Jwt__ChaveSecreta.");
+
+// AUTENTICAÇÃO: ensina o pipeline a entender "Authorization: Bearer x".
+// Para CADA requisição com token, o middleware verifica TUDO isto —
+// e qualquer falha resulta em 401, antes da rota sequer executar:
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(opcoes =>
+    {
+        opcoes.TokenValidationParameters = new TokenValidationParameters
+        {
+            // A assinatura confere? (ninguém alterou o token)
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(chaveJwt)),
+
+            // Foi emitido por NÓS, para o NOSSO frontend?
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Emissor"],
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Publico"],
+
+            // Ainda está dentro da validade?
+            ValidateLifetime = true,
+            // Tolerância de relógio entre servidores. O padrão do .NET
+            // é 5 MINUTOS — o que, na prática, estenderia a vida de
+            // todo token em 5 min. Apertamos para 30 segundos.
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+    });
+
+// AUTORIZAÇÃO: habilita o RequireAuthorization() das rotas (RBAC).
+builder.Services.AddAuthorization();
+
+// Gerador de tokens. Singleton: é só leitura de configuração + cálculo,
+// sem estado por requisição — uma instância serve a aplicação inteira.
+builder.Services.AddSingleton<ServicoToken>();
 
 // [ETAPA 5] Rate Limiting e política de CORS entrarão aqui.
 
@@ -61,13 +110,37 @@ builder.Services.AddDbContext<ContextoDados>(opcoes =>
 // ---------------------------------------------------------------------
 var app = builder.Build();
 
+// ---------------------------------------------------------------------
+// [ETAPA 3] Preparação do banco — SOMENTE em desenvolvimento.
+// A cada partida: aplica migrations pendentes e roda o seed
+// (idempotente) do perfil Admin + usuário inicial.
+// Em PRODUÇÃO isso NÃO acontece automaticamente: lá, migration é um
+// passo deliberado e auditado do deploy — nunca um efeito colateral
+// de a aplicação ter reiniciado.
+// ---------------------------------------------------------------------
+if (app.Environment.IsDevelopment())
+{
+    // "Escopo": como o ContextoDados é registrado por requisição e
+    // aqui estamos FORA de uma requisição, criamos um escopo manual.
+    using var escopo = app.Services.CreateScope();
+    var db = escopo.ServiceProvider.GetRequiredService<ContextoDados>();
+
+    await db.Database.MigrateAsync();      // aplica migrations pendentes
+    await SemeadorDados.SemearAsync(db);   // semeia Admin (idempotente)
+}
+
 // [ETAPA 5] Tratamento global de erros será o PRIMEIRO middleware:
 //           qualquer exceção não tratada vira uma resposta 500 limpa
 //           (Results.Problem), sem vazar stack trace ao cliente.
 
-// [ETAPA 3] app.UseAuthentication() e app.UseAuthorization()
-//           entrarão aqui, NESTA ordem (primeiro identifica QUEM é,
-//           depois verifica O QUE pode fazer).
+// ---------------------------------------------------------------------
+// [ETAPA 3] Middlewares de segurança — a ORDEM é obrigatória:
+//   1º UseAuthentication: lê o token e estabelece QUEM é o requisitante.
+//   2º UseAuthorization:  decide se esse alguém PODE acessar a rota.
+// Invertê-los faria a autorização rodar sem saber quem está pedindo.
+// ---------------------------------------------------------------------
+app.UseAuthentication();
+app.UseAuthorization();
 
 // ---------------------------------------------------------------------
 // ROTAS
@@ -85,10 +158,10 @@ app.MapGet("/saude", () => Results.Ok(new
     horarioUtc = DateTime.UtcNow
 }));
 
-// [ETAPA 3+] As rotas de domínio serão plugadas aqui:
-//            app.MapearRotasAutenticacao();
-//            app.MapearRotasPessoas();
-//            ... uma linha por domínio, e só isso.
+// Módulos de rotas — uma linha por domínio; o detalhe vive em Rotas/.
+app.MapearRotasAutenticacao();
+
+// [ETAPAS FUTURAS] app.MapearRotasPessoas(); app.MapearRotasServidores(); ...
 
 // ---------------------------------------------------------------------
 // FASE 3: Liga o servidor. Bloqueia aqui até a aplicação ser encerrada.

@@ -44,8 +44,8 @@ curl http://localhost:5180/saude
 | Etapa | Entrega | Situação |
 |-------|---------|----------|
 | 1 | Estrutura do monorepo + API mínima com /saude | ✅ |
-| 2 | EntidadeBase + entidades de autenticação + ContextoDados + migration inicial | ⬜ |
-| 3 | Pipeline JWT + endpoint de login com BCrypt | ⬜ |
+| 2 | EntidadeBase + entidades de autenticação + ContextoDados + migration inicial | ✅ |
+| 3 | Pipeline JWT + endpoint de login com BCrypt | ✅ |
 | 4 | Refresh token com rotação + lockout de força bruta | ⬜ |
 | 5 | Rate limiting, CORS e tratamento global de erros | ⬜ |
 | 6 | Scaffold React: cliente HTTP, TanStack Query, login e Route Guards | ⬜ |
