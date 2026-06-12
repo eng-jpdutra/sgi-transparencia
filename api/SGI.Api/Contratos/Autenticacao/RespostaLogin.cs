@@ -15,8 +15,17 @@ namespace SGI.Api.Contratos.Autenticacao;
 ///   Quando o token vence (UTC). Permite ao frontend renovar
 ///   proativamente, em vez de descobrir a expiração levando um 401.
 /// </param>
+/// <param name="TokenRenovacao">
+///   O refresh token: guarda-se, NÃO viaja em cada requisição.
+///   Quando o TokenAcesso vencer, o frontend o envia a /renovar
+///   e recebe um par novo — sem incomodar o usuário com novo login.
+/// </param>
 /// <param name="DeveTrocarSenha">
 ///   true = senha provisória em uso; o frontend deve forçar o
 ///   fluxo de troca de senha antes de liberar o sistema.
 /// </param>
-public record RespostaLogin(string TokenAcesso, DateTime ExpiraEmUtc, bool DeveTrocarSenha);
+public record RespostaLogin(
+    string TokenAcesso,
+    DateTime ExpiraEmUtc,
+    string TokenRenovacao,
+    bool DeveTrocarSenha);

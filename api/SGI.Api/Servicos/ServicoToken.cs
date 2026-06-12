@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using SGI.Api.Dominio.Autenticacao;
@@ -56,7 +57,15 @@ public class ServicoToken
 
         _chave = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(chaveSecreta));
         _expiracaoMinutos = configuracao.GetValue("Jwt:ExpiracaoMinutos", 15);
+        RenovacaoExpiracaoDias = configuracao.GetValue("Jwt:RenovacaoExpiracaoDias", 7);
     }
+
+    /// <summary>
+    /// Validade do token de renovação, em dias (configurável).
+    /// Exposto publicamente porque a rota de login/renovação precisa
+    /// dele para calcular o ExpiraEm do registro no banco.
+    /// </summary>
+    public int RenovacaoExpiracaoDias { get; }
 
     /// <summary>
     /// Gera o token de acesso de um usuário já autenticado.
@@ -97,4 +106,27 @@ public class ServicoToken
 
         return (new JwtSecurityTokenHandler().WriteToken(token), expiraEmUtc);
     }
+
+    /// <summary>
+    /// Gera um token de renovação (refresh token).
+    /// Diferente do JWT, ele não carrega informação nenhuma — é puro
+    /// ACASO: 64 bytes criptograficamente aleatórios em Base64.
+    /// Sua força está em ser impossível de adivinhar; seu significado
+    /// está no REGISTRO correspondente na tabela RefreshTokens.
+    /// </summary>
+    public string GerarTokenRenovacao()
+        => Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+
+    /// <summary>
+    /// Hash SHA-256 do token de renovação — é ISTO que vai para o banco,
+    /// nunca o token em si (mesmo princípio do BCrypt para senhas:
+    /// banco vazado não pode render credenciais utilizáveis).
+    ///
+    /// Por que SHA-256 aqui e não BCrypt? BCrypt é lento de propósito,
+    /// ideal para senhas (curtas, adivinháveis). O token tem 64 bytes
+    /// aleatórios — força bruta é matematicamente inviável, então um
+    /// hash rápido basta e mantém a renovação leve.
+    /// </summary>
+    public static string CalcularHash(string token)
+        => Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 }
