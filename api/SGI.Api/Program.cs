@@ -12,6 +12,10 @@
 // (ex.: app.MapearRotasAutenticacao()), a partir da Etapa 3.
 // =====================================================================
 
+// "using" = importação dos namespaces utilizados neste arquivo.
+using Microsoft.EntityFrameworkCore;   // UseSqlite, AddDbContext
+using SGI.Api.Persistencia;            // ContextoDados
+
 // ---------------------------------------------------------------------
 // FASE 1: O "builder" — configuração e registro de serviços.
 // Tudo ANTES de builder.Build() é preparação: ainda não há servidor.
@@ -23,10 +27,28 @@ var builder = WebApplication.CreateBuilder(args);
 //   - Configura logging para o console
 //   - Prepara o servidor web Kestrel
 
-// [ETAPA 2] Registro do ContextoDados (EF Core) entrará aqui:
-//           SQLite em desenvolvimento, PostgreSQL em produção,
-//           decidido pela configuração — nunca por código condicional
-//           espalhado pela aplicação.
+// ---------------------------------------------------------------------
+// [ETAPA 2] Persistência: registro do ContextoDados (EF Core).
+// ---------------------------------------------------------------------
+// FAIL FAST: se a connection string não existir na configuração,
+// a aplicação se RECUSA a subir, com mensagem clara — em vez de
+// subir "saudável" e explodir misteriosamente na primeira query.
+var connectionString = builder.Configuration.GetConnectionString("BancoSgi")
+    ?? throw new InvalidOperationException(
+        "Connection string 'BancoSgi' não encontrada na configuração. " +
+        "Em DEV ela vem do appsettings.Development.json; em PROD, da " +
+        "variável de ambiente ConnectionStrings__BancoSgi.");
+
+// AddDbContext registra o contexto na injeção de dependência com
+// tempo de vida "scoped": UMA instância por requisição HTTP —
+// cada requisição enxerga o banco de forma isolada e consistente.
+//
+// ESTE é o único ponto do sistema que conhece o banco concreto.
+// Quando formos para produção, a troca SQLite -> PostgreSQL
+// acontece AQUI (UseNpgsql, decidido pelo ambiente) e em nenhum
+// outro lugar — é o agnosticismo de banco na prática.
+builder.Services.AddDbContext<ContextoDados>(opcoes =>
+    opcoes.UseSqlite(connectionString));
 
 // [ETAPA 3] Autenticação JWT + Autorização (RBAC) entrarão aqui.
 
