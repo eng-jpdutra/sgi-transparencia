@@ -121,7 +121,10 @@ public static class RotasAutenticacao
                 tokenAcesso, expiraEmUtc, tokenRenovacao,
                 usuario.DeveTrocarSenha));
         })
-        .AllowAnonymous();
+        .AllowAnonymous()
+        // [Etapa 5] Cota apertada (10/min por IP): esta é a porta que
+        // atacantes batem — não merece a cota generosa das demais.
+        .RequireRateLimiting("autenticacao");
 
         // ==============================================================
         // POST /autenticacao/renovar — troca refresh token válido por
@@ -215,7 +218,10 @@ public static class RotasAutenticacao
                 tokenAcesso, expiraEmUtc, novoTokenRenovacao,
                 tokenArmazenado.Usuario.DeveTrocarSenha));
         })
-        .AllowAnonymous();
+        .AllowAnonymous()
+        // [Etapa 5] Mesma cota apertada do login: rota anônima que
+        // aceita credencial (o refresh token) é alvo igual.
+        .RequireRateLimiting("autenticacao");
 
         // ==============================================================
         // POST /autenticacao/sair — logout REAL: revoga o refresh token.

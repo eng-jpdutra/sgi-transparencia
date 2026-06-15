@@ -14,9 +14,11 @@
 
 // "using" = importação dos namespaces utilizados neste arquivo.
 using System.Text;                                      // Encoding (chave JWT)
+using System.Threading.RateLimiting;                    // rate limiting
 using Microsoft.AspNetCore.Authentication.JwtBearer;    // esquema Bearer
 using Microsoft.EntityFrameworkCore;                    // UseSqlite, AddDbContext
 using Microsoft.IdentityModel.Tokens;                   // validação do token
+using SGI.Api.Infraestrutura;                           // ManipuladorErrosGlobal
 using SGI.Api.Persistencia;                             // ContextoDados, SemeadorDados
 using SGI.Api.Rotas;                                    // MapearRotasAutenticacao
 using SGI.Api.Servicos;                                 // ServicoToken
@@ -101,7 +103,78 @@ builder.Services.AddAuthorization();
 // sem estado por requisição — uma instância serve a aplicação inteira.
 builder.Services.AddSingleton<ServicoToken>();
 
-// [ETAPA 5] Rate Limiting e política de CORS entrarão aqui.
+// ---------------------------------------------------------------------
+// [ETAPA 5] Proteção de fronteira: erros globais, CORS e Rate Limiting.
+// ---------------------------------------------------------------------
+
+// ----- Tratamento global de erros -----
+// AddProblemDetails: habilita o formato padrão RFC 7807 para erros.
+// AddExceptionHandler: registra nossa última linha de defesa.
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ManipuladorErrosGlobal>();
+
+// ----- CORS (Cross-Origin Resource Sharing) -----
+// O navegador BLOQUEIA por padrão chamadas de uma origem (o React em
+// localhost:5173) para outra (esta API em localhost:5180). O CORS é a
+// API declarando: "estas origens específicas podem me chamar".
+// A lista vem da CONFIGURAÇÃO: localhost no Development.json em DEV;
+// o domínio real, via variável de ambiente, em PROD. Diretriz v2.1:
+// lista explícita SEMPRE — AllowAnyOrigin é proibido.
+var origensPermitidas = builder.Configuration
+    .GetSection("Cors:OrigensPermitidas").Get<string[]>() ?? [];
+
+builder.Services.AddCors(opcoes =>
+    opcoes.AddPolicy("PoliticaPadrao", politica =>
+        politica.WithOrigins(origensPermitidas)
+                // Só os cabeçalhos que o nosso frontend de fato usa:
+                .WithHeaders("Content-Type", "Authorization")
+                // Só os verbos que a nossa API de fato expõe:
+                .WithMethods("GET", "POST", "PUT", "DELETE")));
+
+// ----- Rate Limiting -----
+// Camada anti-abuso por VOLUME, complementar ao lockout (Etapa 4):
+// o lockout protege UMA CONTA contra adivinhação de senha; o rate
+// limit protege OS ENDPOINTS contra metralhadoras de requisições.
+builder.Services.AddRateLimiter(opcoes =>
+{
+    // Quem estoura o limite recebe 429 (Too Many Requests)...
+    opcoes.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    // ...com uma mensagem amigável no padrão da casa.
+    opcoes.OnRejected = async (contexto, cancelamento) =>
+    {
+        contexto.HttpContext.Response.ContentType = "application/json";
+        await contexto.HttpContext.Response.WriteAsync(
+            """{"mensagem":"Limite de requisições excedido. Aguarde um instante e tente novamente."}""",
+            cancelamento);
+    };
+
+    // LIMITE GLOBAL: vale para TODA rota, particionado POR IP —
+    // cada endereço de origem tem sua própria cota; um cliente
+    // abusivo não consome o limite dos demais.
+    opcoes.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
+        contexto => RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: contexto.Connection.RemoteIpAddress?.ToString()
+                          ?? "origem-desconhecida",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = builder.Configuration
+                    .GetValue("Seguranca:RequisicoesPorMinuto", 100),
+                Window = TimeSpan.FromMinutes(1)
+            }));
+
+    // POLÍTICA "autenticacao": cota bem mais apertada, aplicada às
+    // rotas de login/renovação (são as portas que atacantes batem).
+    opcoes.AddPolicy("autenticacao", contexto =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: contexto.Connection.RemoteIpAddress?.ToString()
+                          ?? "origem-desconhecida",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = builder.Configuration
+                    .GetValue("Seguranca:TentativasAutenticacaoPorMinuto", 10),
+                Window = TimeSpan.FromMinutes(1)
+            }));
+});
 
 // ---------------------------------------------------------------------
 // FASE 2: O "app" — pipeline de middlewares e rotas.
@@ -129,18 +202,32 @@ if (app.Environment.IsDevelopment())
     await SemeadorDados.SemearAsync(db);   // semeia Admin (idempotente)
 }
 
-// [ETAPA 5] Tratamento global de erros será o PRIMEIRO middleware:
-//           qualquer exceção não tratada vira uma resposta 500 limpa
-//           (Results.Problem), sem vazar stack trace ao cliente.
-
 // ---------------------------------------------------------------------
-// [ETAPA 3] Middlewares de segurança — a ORDEM é obrigatória:
-//   1º UseAuthentication: lê o token e estabelece QUEM é o requisitante.
-//   2º UseAuthorization:  decide se esse alguém PODE acessar a rota.
-// Invertê-los faria a autorização rodar sem saber quem está pedindo.
+// [ETAPA 5] PIPELINE COMPLETO — a ordem conta a história da requisição:
+//   1º Erros:        abraça TUDO abaixo; qualquer exceção termina nele.
+//   2º CORS:         barra origens não autorizadas na porta.
+//   3º RateLimiter:  barra excesso de volume ANTES de gastar CPU
+//                    com validação de token ou banco.
+//   4º Autenticação: identifica QUEM é (lê o JWT).
+//   5º Autorização:  decide O QUE esse alguém pode (RBAC).
 // ---------------------------------------------------------------------
+app.UseExceptionHandler();
+app.UseCors("PoliticaPadrao");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Rota de teste do tratamento de erros — EXISTE SOMENTE EM DEV.
+// Lança uma exceção de propósito para você comprovar que o cliente
+// recebe um 500 limpo enquanto o stack trace fica nos logs do servidor.
+if (app.Environment.IsDevelopment())
+{
+    app.MapGet("/dev/erro", () =>
+    {
+        throw new InvalidOperationException(
+            "Explosão proposital para testar o ManipuladorErrosGlobal.");
+    });
+}
 
 // ---------------------------------------------------------------------
 // ROTAS
