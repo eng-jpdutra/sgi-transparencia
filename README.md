@@ -48,6 +48,24 @@ curl http://localhost:5180/saude
 | 3 | Pipeline JWT + endpoint de login com BCrypt | ✅ |
 | 4 | Refresh token com rotação + lockout de força bruta + troca de senha | ✅ |
 | 5 | Rate limiting, CORS e tratamento global de erros | ✅ |
-| 6 | Scaffold React: cliente HTTP, TanStack Query, login e Route Guards | ⬜ |
+| 6 | Scaffold React: cliente HTTP, TanStack Query, login e Route Guards | 🔄 em andamento |
 
-As diretrizes de arquitetura do projeto (v2.1) e os ADRs vivem em `docs/`.
+### Etapa 6 — sub-passos
+
+| Sub-passo | Entrega | Situação |
+|-----------|---------|----------|
+| 6.1 | Scaffold Vite + React + TS, MUI, tema, TanStack Query | ✅ |
+| 6.2 | Cliente HTTP central (token + renovação automática) | ⬜ |
+| 6.3 | Tela de login + contexto de sessão + troca de senha | ⬜ |
+| 6.4 | Route Guards + layout autenticado + página inicial | ⬜ |
+
+## Como executar o frontend (a partir da Etapa 6.1)
+
+```bash
+cd web
+npm install      # baixa as dependências (só na 1ª vez)
+npm run dev      # sobe o Vite em http://localhost:5173
+```
+
+O backend (`api/SGI.Api`) e o frontend (`web`) rodam ao mesmo tempo,
+em terminais separados. O CORS do backend já autoriza a origem 5173.
