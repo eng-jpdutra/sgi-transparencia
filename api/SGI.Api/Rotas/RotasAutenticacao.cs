@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using SGI.Api.Contratos.Autenticacao;
 using SGI.Api.Dominio.Autenticacao;
+using SGI.Api.Infraestrutura;
 using SGI.Api.Persistencia;
 using SGI.Api.Servicos;
 
@@ -9,8 +10,8 @@ namespace SGI.Api.Rotas;
 
 /// <summary>
 /// Rotas do domínio de autenticação.
-/// Etapa 4: além do login, agora com lockout de força bruta,
-/// renovação de token com rotação, logout e troca de senha.
+/// Etapa 4.1: o refresh token agora trafega em cookie HttpOnly
+/// (ver CookieRefreshToken), não mais no corpo das requisições.
 /// </summary>
 public static class RotasAutenticacao
 {
@@ -23,11 +24,11 @@ public static class RotasAutenticacao
         // ==============================================================
         grupo.MapPost("/login", async (
             RequisicaoLogin requisicao,
+            HttpContext contexto,
             ContextoDados db,
             ServicoToken servicoToken,
             IConfiguration configuracao) =>
         {
-            // ---------- FAIL FAST ---------------------------------------
             if (string.IsNullOrWhiteSpace(requisicao.Login) ||
                 string.IsNullOrWhiteSpace(requisicao.Senha))
             {
@@ -44,12 +45,7 @@ public static class RotasAutenticacao
 
             var agoraUtc = DateTime.UtcNow;
 
-            // ---------- LOCKOUT: conta bloqueada? -----------------------
-            // Decisão consciente de UX vs sigilo: a mensagem de bloqueio
-            // revela que a conta existe — trade-off aceitável num sistema
-            // INTERNO, pois orienta o usuário legítimo a esperar em vez
-            // de queimar mais tentativas. (Num sistema público, seria
-            // mensagem genérica aqui também.)
+            // Conta bloqueada por lockout?
             if (usuario is not null && usuario.BloqueadoAte > agoraUtc)
             {
                 var minutosRestantes = (int)Math.Ceiling(
@@ -65,16 +61,14 @@ public static class RotasAutenticacao
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
-            // ---------- Verificação da senha ----------------------------
+            // Senha confere?
             if (usuario is null ||
                 !BCrypt.Net.BCrypt.Verify(requisicao.Senha, usuario.SenhaHash))
             {
-                // Senha errada para um usuário EXISTENTE: conta a falha.
                 if (usuario is not null)
                 {
                     usuario.FalhasAcesso++;
 
-                    // Política vinda da CONFIGURAÇÃO, não números mágicos:
                     var maxFalhas = configuracao
                         .GetValue("Seguranca:MaxFalhasLogin", 5);
                     var minutosBloqueio = configuracao
@@ -84,69 +78,48 @@ public static class RotasAutenticacao
                     {
                         usuario.BloqueadoAte =
                             agoraUtc.AddMinutes(minutosBloqueio);
-                        usuario.FalhasAcesso = 0; // recomeça após o bloqueio
+                        usuario.FalhasAcesso = 0;
                     }
 
                     await db.SaveChangesAsync();
                 }
 
-                // Mensagem genérica (anti-enumeração de usuários).
                 return Results.Json(
                     new { mensagem = "Credenciais inválidas." },
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
-            // ---------- Sucesso: zera o lockout -------------------------
+            // Sucesso: zera lockout e emite o par de tokens.
             usuario.FalhasAcesso = 0;
             usuario.BloqueadoAte = null;
 
-            // ---------- Emite o PAR de tokens ---------------------------
-            // 1) Access token (JWT, ~15 min) — viaja em toda requisição.
-            var (tokenAcesso, expiraEmUtc) =
-                servicoToken.GerarTokenAcesso(usuario);
+            var resposta = await EmitirSessaoAsync(
+                contexto, db, servicoToken, usuario, agoraUtc);
 
-            // 2) Refresh token (dias) — só o HASH vai para o banco;
-            //    o token verdadeiro só existe na resposta ao cliente.
-            var tokenRenovacao = servicoToken.GerarTokenRenovacao();
-            db.RefreshTokens.Add(new RefreshToken
-            {
-                UsuarioId = usuario.Id,
-                TokenHash = ServicoToken.CalcularHash(tokenRenovacao),
-                ExpiraEm = agoraUtc.AddDays(servicoToken.RenovacaoExpiracaoDias)
-            });
-
-            await db.SaveChangesAsync();
-
-            return Results.Ok(new RespostaLogin(
-                tokenAcesso, expiraEmUtc, tokenRenovacao,
-                usuario.DeveTrocarSenha));
+            return Results.Ok(resposta);
         })
         .AllowAnonymous()
-        // [Etapa 5] Cota apertada (10/min por IP): esta é a porta que
-        // atacantes batem — não merece a cota generosa das demais.
         .RequireRateLimiting("autenticacao");
 
         // ==============================================================
-        // POST /autenticacao/renovar — troca refresh token válido por
-        // um PAR NOVO de tokens (rotação). Anônimo: possuir o token
-        // de renovação É a credencial neste fluxo.
+        // POST /autenticacao/renovar — lê o refresh token do COOKIE.
+        // Sem corpo: a credencial é o cookie que o navegador anexa.
         // ==============================================================
         grupo.MapPost("/renovar", async (
-            RequisicaoRenovacao requisicao,
+            HttpContext contexto,
             ContextoDados db,
             ServicoToken servicoToken) =>
         {
-            // ---------- FAIL FAST ---------------------------------------
-            if (string.IsNullOrWhiteSpace(requisicao.TokenRenovacao))
+            var tokenRecebido = CookieRefreshToken.Ler(contexto);
+
+            if (string.IsNullOrWhiteSpace(tokenRecebido))
             {
-                return Results.BadRequest(new
-                {
-                    mensagem = "Token de renovação é obrigatório."
-                });
+                return Results.Json(
+                    new { mensagem = "Sessão inválida ou expirada." },
+                    statusCode: StatusCodes.Status401Unauthorized);
             }
 
-            // Busca pelo HASH (nunca guardamos o token em si).
-            var hash = ServicoToken.CalcularHash(requisicao.TokenRenovacao);
+            var hash = ServicoToken.CalcularHash(tokenRecebido);
 
             var tokenArmazenado = await db.RefreshTokens
                 .Include(rt => rt.Usuario)
@@ -156,9 +129,6 @@ public static class RotasAutenticacao
 
             var agoraUtc = DateTime.UtcNow;
 
-            // Token desconhecido OU usuário inativado (o query filter
-            // global derruba o Include do usuário inativo — é assim que
-            // a exoneração corta a renovação): 401 genérico.
             if (tokenArmazenado is null || tokenArmazenado.Usuario is null)
             {
                 return Results.Json(
@@ -166,31 +136,26 @@ public static class RotasAutenticacao
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
-            // ---------- DETECÇÃO DE ROUBO -------------------------------
-            // Um token JÁ REVOGADO sendo reapresentado significa que duas
-            // partes possuem a mesma cópia — e uma delas é um ladrão
-            // (a rotação garante que o dono legítimo sempre tem o mais
-            // novo). Resposta enterprise: derrubar TODAS as sessões do
-            // usuário e forçar novo login. Inconveniência mínima para a
-            // vítima; fim de jogo para o atacante.
+            // DETECÇÃO DE ROUBO: token já revogado reaparecendo =
+            // cópia em mãos erradas. Derruba TODAS as sessões.
             if (tokenArmazenado.RevogadoEm is not null)
             {
-                var sessoesDoUsuario = await db.RefreshTokens
+                var sessoes = await db.RefreshTokens
                     .Where(rt => rt.UsuarioId == tokenArmazenado.UsuarioId
                               && rt.RevogadoEm == null)
                     .ToListAsync();
 
-                foreach (var sessao in sessoesDoUsuario)
+                foreach (var sessao in sessoes)
                     sessao.RevogadoEm = agoraUtc;
 
                 await db.SaveChangesAsync();
+                CookieRefreshToken.Remover(contexto);
 
                 return Results.Json(
                     new { mensagem = "Sessão inválida ou expirada." },
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
-            // ---------- Expirado naturalmente? --------------------------
             if (tokenArmazenado.ExpiraEm <= agoraUtc)
             {
                 return Results.Json(
@@ -198,83 +163,58 @@ public static class RotasAutenticacao
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
-            // ---------- ROTAÇÃO: revoga o antigo, emite par novo --------
+            // ROTAÇÃO: revoga o atual e emite um par novo.
             tokenArmazenado.RevogadoEm = agoraUtc;
 
-            var novoTokenRenovacao = servicoToken.GerarTokenRenovacao();
-            db.RefreshTokens.Add(new RefreshToken
-            {
-                UsuarioId = tokenArmazenado.UsuarioId,
-                TokenHash = ServicoToken.CalcularHash(novoTokenRenovacao),
-                ExpiraEm = agoraUtc.AddDays(servicoToken.RenovacaoExpiracaoDias)
-            });
+            var resposta = await EmitirSessaoAsync(
+                contexto, db, servicoToken, tokenArmazenado.Usuario, agoraUtc);
 
-            await db.SaveChangesAsync();
-
-            var (tokenAcesso, expiraEmUtc) =
-                servicoToken.GerarTokenAcesso(tokenArmazenado.Usuario);
-
-            return Results.Ok(new RespostaLogin(
-                tokenAcesso, expiraEmUtc, novoTokenRenovacao,
-                tokenArmazenado.Usuario.DeveTrocarSenha));
+            return Results.Ok(resposta);
         })
         .AllowAnonymous()
-        // [Etapa 5] Mesma cota apertada do login: rota anônima que
-        // aceita credencial (o refresh token) é alvo igual.
         .RequireRateLimiting("autenticacao");
 
         // ==============================================================
-        // POST /autenticacao/sair — logout REAL: revoga o refresh token.
-        // (Descartar tokens só no frontend é logout de mentira: o
-        // refresh continuaria utilizável por quem o tivesse copiado.)
+        // POST /autenticacao/sair — revoga a sessão do cookie e o apaga.
         // ==============================================================
         grupo.MapPost("/sair", async (
-            RequisicaoRenovacao requisicao,
+            HttpContext contexto,
             ClaimsPrincipal usuarioLogado,
             ContextoDados db) =>
         {
-            if (string.IsNullOrWhiteSpace(requisicao.TokenRenovacao))
-            {
-                return Results.BadRequest(new
-                {
-                    mensagem = "Token de renovação é obrigatório."
-                });
-            }
-
+            var tokenRecebido = CookieRefreshToken.Ler(contexto);
             var idUsuario = int.Parse(
                 usuarioLogado.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-            var hash = ServicoToken.CalcularHash(requisicao.TokenRenovacao);
-
-            // Defesa em profundidade: o token a revogar precisa existir
-            // E pertencer a quem está logado — ninguém desloga os outros.
-            var tokenArmazenado = await db.RefreshTokens
-                .FirstOrDefaultAsync(rt => rt.TokenHash == hash
-                                        && rt.UsuarioId == idUsuario);
-
-            if (tokenArmazenado is not null &&
-                tokenArmazenado.RevogadoEm is null)
+            if (!string.IsNullOrWhiteSpace(tokenRecebido))
             {
-                tokenArmazenado.RevogadoEm = DateTime.UtcNow;
-                await db.SaveChangesAsync();
+                var hash = ServicoToken.CalcularHash(tokenRecebido);
+                var tokenArmazenado = await db.RefreshTokens
+                    .FirstOrDefaultAsync(rt => rt.TokenHash == hash
+                                            && rt.UsuarioId == idUsuario);
+
+                if (tokenArmazenado is not null &&
+                    tokenArmazenado.RevogadoEm is null)
+                {
+                    tokenArmazenado.RevogadoEm = DateTime.UtcNow;
+                    await db.SaveChangesAsync();
+                }
             }
 
-            // 204: deu certo, nada a dizer. (Idempotente: sair duas
-            // vezes não é erro.)
+            CookieRefreshToken.Remover(contexto);
             return Results.NoContent();
         })
         .RequireAuthorization();
 
         // ==============================================================
-        // POST /autenticacao/trocar-senha — fecha o ciclo do
-        // DeveTrocarSenha e serve para trocas voluntárias.
+        // POST /autenticacao/trocar-senha
         // ==============================================================
         grupo.MapPost("/trocar-senha", async (
             RequisicaoTrocaSenha requisicao,
+            HttpContext contexto,
             ClaimsPrincipal usuarioLogado,
             ContextoDados db) =>
         {
-            // ---------- FAIL FAST: valida ANTES de tocar o banco --------
             if (string.IsNullOrWhiteSpace(requisicao.SenhaAtual) ||
                 string.IsNullOrWhiteSpace(requisicao.NovaSenha))
             {
@@ -284,8 +224,6 @@ public static class RotasAutenticacao
                 });
             }
 
-            // Política mínima de senha. (Evolução futura — comprimento,
-            // complexidade, senhas vazadas — entra por configuração.)
             if (requisicao.NovaSenha.Length < 8)
             {
                 return Results.BadRequest(new
@@ -302,14 +240,11 @@ public static class RotasAutenticacao
                 });
             }
 
-            // Quem está pedindo? Vem do TOKEN (claim sub), nunca do corpo
-            // da requisição — usuário troca a PRÓPRIA senha, ponto.
             var idUsuario = int.Parse(
                 usuarioLogado.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             var usuario = await db.Usuarios.FirstAsync(u => u.Id == idUsuario);
 
-            // Prova de posse da senha vigente (anti-sequestro de sessão).
             if (!BCrypt.Net.BCrypt.Verify(requisicao.SenhaAtual,
                                           usuario.SenhaHash))
             {
@@ -322,9 +257,7 @@ public static class RotasAutenticacao
                 BCrypt.Net.BCrypt.HashPassword(requisicao.NovaSenha);
             usuario.DeveTrocarSenha = false;
 
-            // Governança: senha trocada = TODAS as sessões abertas caem.
-            // Se a troca foi motivada por suspeita de comprometimento,
-            // isto expulsa o intruso junto.
+            // Senha trocada = todas as sessões caem (expulsa intruso).
             var sessoesAbertas = await db.RefreshTokens
                 .Where(rt => rt.UsuarioId == idUsuario
                           && rt.RevogadoEm == null)
@@ -334,13 +267,14 @@ public static class RotasAutenticacao
                 sessao.RevogadoEm = DateTime.UtcNow;
 
             await db.SaveChangesAsync();
+            CookieRefreshToken.Remover(contexto);
 
             return Results.NoContent();
         })
         .RequireAuthorization();
 
         // ==============================================================
-        // GET /autenticacao/eu — inspeção: "quem sou eu?" (inalterado)
+        // GET /autenticacao/eu — "quem sou eu?" (a partir do token)
         // ==============================================================
         grupo.MapGet("/eu", (ClaimsPrincipal usuarioLogado) =>
         {
@@ -353,5 +287,38 @@ public static class RotasAutenticacao
             });
         })
         .RequireAuthorization();
+    }
+
+    /// <summary>
+    /// Emite uma sessão nova: gera o par de tokens, persiste o hash do
+    /// refresh token, grava-o no cookie HttpOnly e devolve a resposta
+    /// (só com o access token). Extraído para um único lugar (DRY):
+    /// login e renovação compartilham exatamente esta lógica.
+    /// </summary>
+    private static async Task<RespostaLogin> EmitirSessaoAsync(
+        HttpContext contexto,
+        ContextoDados db,
+        ServicoToken servicoToken,
+        Usuario usuario,
+        DateTime agoraUtc)
+    {
+        var (tokenAcesso, expiraEmUtc) = servicoToken.GerarTokenAcesso(usuario);
+
+        var tokenRenovacao = servicoToken.GerarTokenRenovacao();
+        var expiraRenovacao = agoraUtc.AddDays(servicoToken.RenovacaoExpiracaoDias);
+
+        db.RefreshTokens.Add(new RefreshToken
+        {
+            UsuarioId = usuario.Id,
+            TokenHash = ServicoToken.CalcularHash(tokenRenovacao),
+            ExpiraEm = expiraRenovacao
+        });
+        await db.SaveChangesAsync();
+
+        // O refresh token vai para o cookie HttpOnly — nunca no corpo.
+        CookieRefreshToken.Gravar(contexto, tokenRenovacao, expiraRenovacao);
+
+        return new RespostaLogin(
+            tokenAcesso, expiraEmUtc, usuario.DeveTrocarSenha);
     }
 }

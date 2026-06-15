@@ -48,16 +48,21 @@ curl http://localhost:5180/saude
 | 3 | Pipeline JWT + endpoint de login com BCrypt | ✅ |
 | 4 | Refresh token com rotação + lockout de força bruta + troca de senha | ✅ |
 | 5 | Rate limiting, CORS e tratamento global de erros | ✅ |
-| 6 | Scaffold React: cliente HTTP, TanStack Query, login e Route Guards | 🔄 em andamento |
+| 6 | Scaffold React: cliente HTTP, TanStack Query, login e Route Guards | ✅ |
 
 ### Etapa 6 — sub-passos
 
 | Sub-passo | Entrega | Situação |
 |-----------|---------|----------|
 | 6.1 | Scaffold Vite + React + TS, MUI, tema, TanStack Query | ✅ |
-| 6.2 | Cliente HTTP central (token + renovação automática) | ⬜ |
-| 6.3 | Tela de login + contexto de sessão + troca de senha | ⬜ |
-| 6.4 | Route Guards + layout autenticado + página inicial | ⬜ |
+| 6.2 | Cliente HTTP central + refresh via cookie HttpOnly (Etapa 4.1) | ✅ |
+| 6.3 | Tela de login + contexto de sessão + troca de senha | ✅ |
+| 6.4 | React Router + Route Guards (auth e perfil) + layout autenticado | ✅ |
+
+> **Nota de deploy (BrowserRouter):** em produção, o servidor que serve
+> o frontend deve redirecionar todas as rotas para o index.html
+> (fallback SPA), senão recarregar uma URL interna (ex.: /admin) dá 404.
+> O Vite já trata isso em desenvolvimento.
 
 ## Como executar o frontend (a partir da Etapa 6.1)
 

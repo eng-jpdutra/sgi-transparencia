@@ -1,31 +1,26 @@
 namespace SGI.Api.Contratos.Autenticacao;
 
 /// <summary>
-/// Resposta do login bem-sucedido.
+/// Resposta do login/renovação bem-sucedidos.
 ///
-/// Repare no que ela NÃO contém: nada da entidade Usuario (nem o
-/// hash, nem contadores internos). DTO de saída expõe APENAS o que
-/// o cliente precisa — diretriz: entidades do EF jamais saem pela API.
+/// Etapa 4.1: o refresh token NÃO aparece mais aqui — ele viaja em
+/// um cookie HttpOnly (ver CookieRefreshToken), inacessível ao
+/// JavaScript. O corpo carrega apenas o access token, que o frontend
+/// guarda EM MEMÓRIA (some ao fechar a aba). Cada credencial no seu
+/// lugar, com o tempo de vida e a exposição adequados ao seu papel.
 /// </summary>
 /// <param name="TokenAcesso">
-///   O JWT. O frontend o enviará em toda requisição no cabeçalho:
-///   Authorization: Bearer {token}
+///   O JWT curto (~15 min). Vai no cabeçalho Authorization de cada
+///   requisição. Guardado em memória pelo frontend.
 /// </param>
 /// <param name="ExpiraEmUtc">
-///   Quando o token vence (UTC). Permite ao frontend renovar
-///   proativamente, em vez de descobrir a expiração levando um 401.
-/// </param>
-/// <param name="TokenRenovacao">
-///   O refresh token: guarda-se, NÃO viaja em cada requisição.
-///   Quando o TokenAcesso vencer, o frontend o envia a /renovar
-///   e recebe um par novo — sem incomodar o usuário com novo login.
+///   Quando o access token vence (UTC). Permite renovação proativa.
 /// </param>
 /// <param name="DeveTrocarSenha">
-///   true = senha provisória em uso; o frontend deve forçar o
-///   fluxo de troca de senha antes de liberar o sistema.
+///   true = senha provisória; o frontend força a troca antes de
+///   liberar o sistema.
 /// </param>
 public record RespostaLogin(
     string TokenAcesso,
     DateTime ExpiraEmUtc,
-    string TokenRenovacao,
     bool DeveTrocarSenha);

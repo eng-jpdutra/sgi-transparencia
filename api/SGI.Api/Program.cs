@@ -129,7 +129,13 @@ builder.Services.AddCors(opcoes =>
                 // Só os cabeçalhos que o nosso frontend de fato usa:
                 .WithHeaders("Content-Type", "Authorization")
                 // Só os verbos que a nossa API de fato expõe:
-                .WithMethods("GET", "POST", "PUT", "DELETE")));
+                .WithMethods("GET", "POST", "PUT", "DELETE")
+                // [Etapa 4.1] Permite o navegador enviar o cookie
+                // HttpOnly do refresh token nas chamadas entre origens
+                // (5173 -> 5180). Sem isto, o cookie não viajaria.
+                // Exige origens EXPLÍCITAS (nunca AllowAnyOrigin) — e
+                // a nossa lista já é explícita, então é seguro.
+                .AllowCredentials()));
 
 // ----- Rate Limiting -----
 // Camada anti-abuso por VOLUME, complementar ao lockout (Etapa 4):
