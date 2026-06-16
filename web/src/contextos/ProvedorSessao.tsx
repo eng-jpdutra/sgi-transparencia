@@ -100,15 +100,11 @@ export function ProvedorSessao({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const concluirTrocaSenha = useCallback(() => {
-    setDeveTrocarSenha(false)
-  }, [])
-
   return (
     <Sessao.Provider
       value={{
         situacao, usuario, deveTrocarSenha,
-        entrar, sair, concluirTrocaSenha,
+        entrar, sair,
       }}
     >
       {children}

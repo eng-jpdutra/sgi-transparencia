@@ -22,7 +22,4 @@ export interface ContextoSessao {
 
   /** Encerra a sessão (revoga no servidor e limpa o estado local). */
   sair: () => Promise<void>
-
-  /** Marca a troca de senha como concluída (chamado após sucesso). */
-  concluirTrocaSenha: () => void
 }

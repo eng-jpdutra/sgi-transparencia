@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SGI.Api.Persistencia;
 
@@ -10,9 +11,11 @@ using SGI.Api.Persistencia;
 namespace SGI.Api.Migrations
 {
     [DbContext(typeof(ContextoDados))]
-    partial class ContextoDadosModelSnapshot : ModelSnapshot
+    [Migration("20260615202256_ModuloLegislaturas")]
+    partial class ModuloLegislaturas
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.11");
@@ -167,9 +170,6 @@ namespace SGI.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("AnoInicio")
-                        .HasColumnType("INTEGER");
-
                     b.Property<bool>("Ativo")
                         .HasColumnType("INTEGER");
 
@@ -179,46 +179,15 @@ namespace SGI.Api.Migrations
                     b.Property<DateTime>("CriadoEm")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("Numero")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AnoInicio")
-                        .IsUnique();
-
-                    b.HasIndex("Numero")
-                        .IsUnique();
-
-                    b.ToTable("Legislaturas");
-                });
-
-            modelBuilder.Entity("SGI.Api.Dominio.Partido", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("Ativo")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("AtualizadoEm")
+                    b.Property<DateOnly>("DataFim")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("CriadoEm")
+                    b.Property<DateOnly>("DataInicio")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Nome")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Numero")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Sigla")
-                        .IsRequired()
-                        .HasMaxLength(25)
+                        .HasMaxLength(60)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -226,13 +195,7 @@ namespace SGI.Api.Migrations
                     b.HasIndex("Nome")
                         .IsUnique();
 
-                    b.HasIndex("Numero")
-                        .IsUnique();
-
-                    b.HasIndex("Sigla")
-                        .IsUnique();
-
-                    b.ToTable("Partidos");
+                    b.ToTable("Legislaturas");
                 });
 
             modelBuilder.Entity("SGI.Api.Dominio.Autenticacao.RefreshToken", b =>

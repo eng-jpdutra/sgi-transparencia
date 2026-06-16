@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SGI.Api.Dominio;
 using SGI.Api.Dominio.Autenticacao;
 
 namespace SGI.Api.Persistencia;
@@ -31,6 +32,22 @@ public static class SemeadorDados
             await db.SaveChangesAsync();
         }
 
+        // ---------- Perfil Consulta (não-admin) -------------------
+        // Existe para testar o RBAC: um usuário só com este perfil
+        // enxerga os módulos, mas não pode escrever.
+        var perfilConsulta = await db.Perfis
+            .FirstOrDefaultAsync(p => p.Nome == "Consulta");
+        if (perfilConsulta is null)
+        {
+            perfilConsulta = new Perfil
+            {
+                Nome = "Consulta",
+                Descricao = "Acesso somente leitura aos módulos do sistema."
+            };
+            db.Perfis.Add(perfilConsulta);
+            await db.SaveChangesAsync();
+        }
+
         // ---------- Usuário administrador inicial ------------------
         var existeAdmin = await db.Usuarios.AnyAsync(u => u.Login == "admin");
         if (!existeAdmin)
@@ -54,6 +71,51 @@ public static class SemeadorDados
             };
 
             db.Usuarios.Add(usuarioAdmin);
+            await db.SaveChangesAsync();
+        }
+
+        // ---------- Usuário comum (perfil Consulta) ----------------
+        // Para testar o RBAC: login "consulta", senha provisória
+        // "Trocar@123". Sem perfil Admin -> não vê botões de escrita
+        // e o backend recusa operações administrativas com 403.
+        var existeConsulta = await db.Usuarios.AnyAsync(u => u.Login == "consulta");
+        if (!existeConsulta)
+        {
+            var usuarioConsulta = new Usuario
+            {
+                Login = "consulta",
+                SenhaHash = BCrypt.Net.BCrypt.HashPassword("Trocar@123"),
+                DeveTrocarSenha = true,
+                Perfis = { new UsuarioPerfil { Perfil = perfilConsulta } }
+            };
+            db.Usuarios.Add(usuarioConsulta);
+            await db.SaveChangesAsync();
+        }
+
+        // ---------- Legislaturas de exemplo (facilitam testar a
+        //            paginação e os filtros já no primeiro acesso) ----
+        if (!await db.Legislaturas.AnyAsync())
+        {
+            // Informa-se apenas número e ano de início; o resto é derivado.
+            db.Legislaturas.AddRange(
+                new Legislatura { Numero = 19, AnoInicio = 2013 },
+                new Legislatura { Numero = 20, AnoInicio = 2017 },
+                new Legislatura { Numero = 21, AnoInicio = 2021 },
+                new Legislatura { Numero = 22, AnoInicio = 2025 });
+
+            await db.SaveChangesAsync();
+        }
+
+        // ---------- Partidos de exemplo ----------
+        if (!await db.Partidos.AnyAsync())
+        {
+            db.Partidos.AddRange(
+                new Partido { Sigla = "MDB", Nome = "Movimento Democrático Brasileiro", Numero = 15 },
+                new Partido { Sigla = "PT", Nome = "Partido dos Trabalhadores", Numero = 13 },
+                new Partido { Sigla = "PL", Nome = "Partido Liberal", Numero = 22 },
+                new Partido { Sigla = "PSDB", Nome = "Partido da Social Democracia Brasileira", Numero = 45 },
+                new Partido { Sigla = "PP", Nome = "Progressistas", Numero = 11 });
+
             await db.SaveChangesAsync();
         }
     }

@@ -30,6 +30,8 @@ public class ContextoDados : DbContext
     public DbSet<Perfil> Perfis => Set<Perfil>();
     public DbSet<UsuarioPerfil> UsuariosPerfis => Set<UsuarioPerfil>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Legislatura> Legislaturas => Set<Legislatura>();
+    public DbSet<Partido> Partidos => Set<Partido>();
 
     /// <summary>
     /// Configuração do modelo: índices, tamanhos de coluna e o
@@ -73,6 +75,27 @@ public class ContextoDados : DbContext
         // índice unique = busca instantânea + impossibilidade de colisão.
         modelo.Entity<RefreshToken>().HasIndex(rt => rt.TokenHash).IsUnique();
         modelo.Entity<RefreshToken>().Property(rt => rt.TokenHash).HasMaxLength(100);
+
+        // --------------------------------------------------------------
+        // LEGISLATURA
+        // --------------------------------------------------------------
+        // Numero e AnoInicio são únicos (a sequência ordinal não se
+        // repete; o ano de início também não). São os campos filtráveis
+        // /ordenáveis, logo indexados (diretriz v2.1). Nome, datas e
+        // AnoFim NÃO são colunas — são derivados ([NotMapped] na entidade).
+        modelo.Entity<Legislatura>().HasIndex(l => l.Numero).IsUnique();
+        modelo.Entity<Legislatura>().HasIndex(l => l.AnoInicio).IsUnique();
+
+        // --------------------------------------------------------------
+        // PARTIDO
+        // --------------------------------------------------------------
+        // Sigla, Numero e Nome são únicos e filtráveis -> indexados
+        // (diretriz v2.1: toda coluna filtrável/identificadora tem índice).
+        modelo.Entity<Partido>().HasIndex(p => p.Sigla).IsUnique();
+        modelo.Entity<Partido>().HasIndex(p => p.Numero).IsUnique();
+        modelo.Entity<Partido>().HasIndex(p => p.Nome).IsUnique();
+        modelo.Entity<Partido>().Property(p => p.Sigla).HasMaxLength(25);
+        modelo.Entity<Partido>().Property(p => p.Nome).HasMaxLength(100);
 
         // --------------------------------------------------------------
         // QUERY FILTER GLOBAL DE SOFT DELETE (diretriz inegociável)

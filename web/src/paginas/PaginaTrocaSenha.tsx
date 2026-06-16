@@ -11,12 +11,13 @@ import { requisitar, ErroRequisicao } from '../api/clienteHttp'
  * Fecha o ciclo iniciado lá na Etapa 3.
  *
  * Importante: trocar a senha REVOGA todas as sessões no backend
- * (Etapa 4), então, ao concluir, encerramos a sessão local e mandamos
- * o usuário logar de novo com a senha nova — comportamento correto e
- * seguro, que evita um estado "logado com sessão já revogada".
+ * (Etapa 4). Por isso, ao concluir, NÃO tentamos "continuar logado":
+ * encerramos a sessão local (sair) e o roteador leva ao login, onde
+ * o usuário entra com a senha nova. Isso evita o estado inconsistente
+ * "autenticado, porém com sessão já revogada no servidor".
  */
 export function PaginaTrocaSenha() {
-  const { sair, concluirTrocaSenha } = useSessao()
+  const { sair } = useSessao()
   const [senhaAtual, setSenhaAtual] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
   const [confirmacao, setConfirmacao] = useState('')
@@ -49,16 +50,19 @@ export function PaginaTrocaSenha() {
         metodo: 'POST',
         corpo: { senhaAtual, novaSenha },
       })
-      concluirTrocaSenha()
+
+      // Sucesso: mostra a confirmação e, após um instante para o
+      // usuário ler, encerra a sessão. O sair() tem try/finally no
+      // contexto, então SEMPRE limpa o estado local (mesmo que a
+      // chamada ao servidor falhe — a sessão já estava revogada).
+      // Ao mudar a situação para 'naoAutenticado', o roteador
+      // automaticamente leva à tela de login.
       setSucesso(true)
-      // A troca revogou a sessão no servidor: saímos e voltamos ao
-      // login após um instante para o usuário ler a confirmação.
       setTimeout(() => { void sair() }, 1800)
     } catch (e) {
       setErro(e instanceof ErroRequisicao
         ? e.message
         : 'Não foi possível concluir. Tente novamente.')
-    } finally {
       setEnviando(false)
     }
   }

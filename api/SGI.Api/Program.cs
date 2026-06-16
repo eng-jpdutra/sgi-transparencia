@@ -253,8 +253,12 @@ app.MapGet("/saude", () => Results.Ok(new
 
 // Módulos de rotas — uma linha por domínio; o detalhe vive em Rotas/.
 app.MapearRotasAutenticacao();
+app.MapearRotasLegislaturas();
+app.MapearRotasPartidos();
+app.MapearRotasUsuarios();
+app.MapearRotasPerfis();
 
-// [ETAPAS FUTURAS] app.MapearRotasPessoas(); app.MapearRotasServidores(); ...
+// [ETAPAS FUTURAS] app.MapearRotasVereadores(); app.MapearRotasServidores(); ...
 
 // ---------------------------------------------------------------------
 // FASE 3: Liga o servidor. Bloqueia aqui até a aplicação ser encerrada.

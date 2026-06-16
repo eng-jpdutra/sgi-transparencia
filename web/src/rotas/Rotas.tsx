@@ -6,6 +6,9 @@ import { LayoutAutenticado } from '../componentes/LayoutAutenticado'
 import { PaginaLogin } from '../paginas/PaginaLogin'
 import { PaginaTrocaSenha } from '../paginas/PaginaTrocaSenha'
 import { PaginaInicio } from '../paginas/PaginaInicio'
+import { PaginaLegislaturas } from '../paginas/PaginaLegislaturas'
+import { PaginaPartidos } from '../paginas/PaginaPartidos'
+import { PaginaUsuarios } from '../paginas/PaginaUsuarios'
 import { PaginaAdmin } from '../paginas/PaginaAdmin'
 import { Pagina404 } from '../paginas/Pagina404'
 
@@ -39,17 +42,31 @@ export function Rotas() {
         }
       />
 
-      {/* Troca de senha: tela cheia, fora da moldura autenticada. */}
-      <Route path="/trocar-senha" element={<PaginaTrocaSenha />} />
+      {/* Troca de senha: tela cheia, fora da moldura autenticada.
+          Só faz sentido para quem está autenticado COM senha provisória
+          pendente. Quando o sair() (após a troca) muda a situação para
+          naoAutenticado, esta rota redireciona ao login — é o que
+          desbloqueia a tela após a troca bem-sucedida. */}
+      <Route
+        path="/trocar-senha"
+        element={
+          situacao !== 'autenticado'
+            ? <Navigate to="/login" replace />
+            : <PaginaTrocaSenha />
+        }
+      />
 
       {/* Tudo abaixo exige autenticação (GuardaAutenticacao) e vive
           dentro da moldura (LayoutAutenticado). */}
       <Route element={<GuardaAutenticacao />}>
         <Route element={<LayoutAutenticado />}>
           <Route path="/" element={<PaginaInicio />} />
+          <Route path="/legislaturas" element={<PaginaLegislaturas />} />
+          <Route path="/partidos" element={<PaginaPartidos />} />
 
-          {/* Sub-árvore que ainda exige o perfil Admin (GuardaPerfil). */}
+          {/* Sub-árvore que exige o perfil Admin (GuardaPerfil). */}
           <Route element={<GuardaPerfil perfis={['Admin']} />}>
+            <Route path="/usuarios" element={<PaginaUsuarios />} />
             <Route path="/admin" element={<PaginaAdmin />} />
           </Route>
         </Route>
