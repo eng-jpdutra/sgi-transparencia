@@ -255,6 +255,8 @@ app.MapGet("/saude", () => Results.Ok(new
 app.MapearRotasAutenticacao();
 app.MapearRotasLegislaturas();
 app.MapearRotasPartidos();
+app.MapearRotasCargos();
+app.MapearRotasRegimes();
 app.MapearRotasUsuarios();
 app.MapearRotasPerfis();
 

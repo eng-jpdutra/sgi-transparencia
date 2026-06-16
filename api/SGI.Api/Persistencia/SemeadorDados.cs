@@ -118,5 +118,28 @@ public static class SemeadorDados
 
             await db.SaveChangesAsync();
         }
+
+        // ---------- Cargos de exemplo ----------
+        if (!await db.Cargos.AnyAsync())
+        {
+            db.Cargos.AddRange(
+                new Cargo { Nome = "Assessor Parlamentar" },
+                new Cargo { Nome = "Analista Legislativo" },
+                new Cargo { Nome = "Técnico Administrativo" },
+                new Cargo { Nome = "Procurador Jurídico" });
+
+            await db.SaveChangesAsync();
+        }
+
+        // ---------- Regimes de contratação de exemplo ----------
+        if (!await db.Regimes.AnyAsync())
+        {
+            db.Regimes.AddRange(
+                new RegimeContratacao { Nome = "Efetivo" },
+                new RegimeContratacao { Nome = "Comissionado" },
+                new RegimeContratacao { Nome = "Temporário" });
+
+            await db.SaveChangesAsync();
+        }
     }
 }

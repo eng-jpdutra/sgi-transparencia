@@ -32,6 +32,8 @@ public class ContextoDados : DbContext
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Legislatura> Legislaturas => Set<Legislatura>();
     public DbSet<Partido> Partidos => Set<Partido>();
+    public DbSet<Cargo> Cargos => Set<Cargo>();
+    public DbSet<RegimeContratacao> Regimes => Set<RegimeContratacao>();
 
     /// <summary>
     /// Configuração do modelo: índices, tamanhos de coluna e o
@@ -96,6 +98,14 @@ public class ContextoDados : DbContext
         modelo.Entity<Partido>().HasIndex(p => p.Nome).IsUnique();
         modelo.Entity<Partido>().Property(p => p.Sigla).HasMaxLength(25);
         modelo.Entity<Partido>().Property(p => p.Nome).HasMaxLength(100);
+
+        // --------------------------------------------------------------
+        // CARGO e REGIME DE CONTRATAÇÃO (estrutura idêntica)
+        // --------------------------------------------------------------
+        modelo.Entity<Cargo>().HasIndex(c => c.Nome).IsUnique();
+        modelo.Entity<Cargo>().Property(c => c.Nome).HasMaxLength(100);
+        modelo.Entity<RegimeContratacao>().HasIndex(r => r.Nome).IsUnique();
+        modelo.Entity<RegimeContratacao>().Property(r => r.Nome).HasMaxLength(100);
 
         // --------------------------------------------------------------
         // QUERY FILTER GLOBAL DE SOFT DELETE (diretriz inegociável)
