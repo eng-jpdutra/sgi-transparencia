@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SGI.Api.Persistencia;
 
@@ -10,9 +11,11 @@ using SGI.Api.Persistencia;
 namespace SGI.Api.Migrations
 {
     [DbContext(typeof(ContextoDados))]
-    partial class ContextoDadosModelSnapshot : ModelSnapshot
+    [Migration("20260616181425_ModuloVinculos")]
+    partial class ModuloVinculos
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.11");
@@ -219,42 +222,6 @@ namespace SGI.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("Legislaturas");
-                });
-
-            modelBuilder.Entity("SGI.Api.Dominio.Mandato", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("Ativo")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("AtualizadoEm")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CriadoEm")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly?>("DataFim")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly>("DataInicio")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("LegislaturaId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("VereadorId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LegislaturaId");
-
-                    b.HasIndex("VereadorId");
-
-                    b.ToTable("Mandatos");
                 });
 
             modelBuilder.Entity("SGI.Api.Dominio.Partido", b =>
@@ -486,25 +453,6 @@ namespace SGI.Api.Migrations
                     b.Navigation("Perfil");
 
                     b.Navigation("Usuario");
-                });
-
-            modelBuilder.Entity("SGI.Api.Dominio.Mandato", b =>
-                {
-                    b.HasOne("SGI.Api.Dominio.Legislatura", "Legislatura")
-                        .WithMany()
-                        .HasForeignKey("LegislaturaId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("SGI.Api.Dominio.Vereador", "Vereador")
-                        .WithMany()
-                        .HasForeignKey("VereadorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Legislatura");
-
-                    b.Navigation("Vereador");
                 });
 
             modelBuilder.Entity("SGI.Api.Dominio.Servidor", b =>

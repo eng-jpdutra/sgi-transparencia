@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SGI.Api.Persistencia;
 
@@ -10,9 +11,11 @@ using SGI.Api.Persistencia;
 namespace SGI.Api.Migrations
 {
     [DbContext(typeof(ContextoDados))]
-    partial class ContextoDadosModelSnapshot : ModelSnapshot
+    [Migration("20260616171329_ModuloPessoas")]
+    partial class ModuloPessoas
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.11");
@@ -221,42 +224,6 @@ namespace SGI.Api.Migrations
                     b.ToTable("Legislaturas");
                 });
 
-            modelBuilder.Entity("SGI.Api.Dominio.Mandato", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("Ativo")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("AtualizadoEm")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CriadoEm")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly?>("DataFim")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly>("DataInicio")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("LegislaturaId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("VereadorId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LegislaturaId");
-
-                    b.HasIndex("VereadorId");
-
-                    b.ToTable("Mandatos");
-                });
-
             modelBuilder.Entity("SGI.Api.Dominio.Partido", b =>
                 {
                     b.Property<int>("Id")
@@ -417,47 +384,6 @@ namespace SGI.Api.Migrations
                     b.ToTable("Vereadores");
                 });
 
-            modelBuilder.Entity("SGI.Api.Dominio.Vinculo", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("Ativo")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("AtualizadoEm")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("CargoId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CriadoEm")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly?>("DataFim")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly>("DataInicio")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("RegimeId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("ServidorId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CargoId");
-
-                    b.HasIndex("RegimeId");
-
-                    b.HasIndex("ServidorId");
-
-                    b.ToTable("Vinculos");
-                });
-
             modelBuilder.Entity("SGI.Api.Dominio.Autenticacao.RefreshToken", b =>
                 {
                     b.HasOne("SGI.Api.Dominio.Autenticacao.Usuario", "Usuario")
@@ -488,25 +414,6 @@ namespace SGI.Api.Migrations
                     b.Navigation("Usuario");
                 });
 
-            modelBuilder.Entity("SGI.Api.Dominio.Mandato", b =>
-                {
-                    b.HasOne("SGI.Api.Dominio.Legislatura", "Legislatura")
-                        .WithMany()
-                        .HasForeignKey("LegislaturaId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("SGI.Api.Dominio.Vereador", "Vereador")
-                        .WithMany()
-                        .HasForeignKey("VereadorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Legislatura");
-
-                    b.Navigation("Vereador");
-                });
-
             modelBuilder.Entity("SGI.Api.Dominio.Servidor", b =>
                 {
                     b.HasOne("SGI.Api.Dominio.Pessoa", "Pessoa")
@@ -527,33 +434,6 @@ namespace SGI.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Pessoa");
-                });
-
-            modelBuilder.Entity("SGI.Api.Dominio.Vinculo", b =>
-                {
-                    b.HasOne("SGI.Api.Dominio.Cargo", "Cargo")
-                        .WithMany()
-                        .HasForeignKey("CargoId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("SGI.Api.Dominio.RegimeContratacao", "Regime")
-                        .WithMany()
-                        .HasForeignKey("RegimeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("SGI.Api.Dominio.Servidor", "Servidor")
-                        .WithMany()
-                        .HasForeignKey("ServidorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Cargo");
-
-                    b.Navigation("Regime");
-
-                    b.Navigation("Servidor");
                 });
 
             modelBuilder.Entity("SGI.Api.Dominio.Autenticacao.Perfil", b =>

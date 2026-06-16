@@ -257,6 +257,9 @@ app.MapearRotasLegislaturas();
 app.MapearRotasPartidos();
 app.MapearRotasCargos();
 app.MapearRotasRegimes();
+app.MapearRotasPessoas();
+app.MapearRotasVinculos();
+app.MapearRotasMandatos();
 app.MapearRotasUsuarios();
 app.MapearRotasPerfis();
 

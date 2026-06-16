@@ -34,6 +34,11 @@ public class ContextoDados : DbContext
     public DbSet<Partido> Partidos => Set<Partido>();
     public DbSet<Cargo> Cargos => Set<Cargo>();
     public DbSet<RegimeContratacao> Regimes => Set<RegimeContratacao>();
+    public DbSet<Pessoa> Pessoas => Set<Pessoa>();
+    public DbSet<Servidor> Servidores => Set<Servidor>();
+    public DbSet<Vereador> Vereadores => Set<Vereador>();
+    public DbSet<Vinculo> Vinculos => Set<Vinculo>();
+    public DbSet<Mandato> Mandatos => Set<Mandato>();
 
     /// <summary>
     /// Configuração do modelo: índices, tamanhos de coluna e o
@@ -106,6 +111,68 @@ public class ContextoDados : DbContext
         modelo.Entity<Cargo>().Property(c => c.Nome).HasMaxLength(100);
         modelo.Entity<RegimeContratacao>().HasIndex(r => r.Nome).IsUnique();
         modelo.Entity<RegimeContratacao>().Property(r => r.Nome).HasMaxLength(100);
+
+        // --------------------------------------------------------------
+        // PESSOA + papéis (SERVIDOR, VEREADOR)
+        // --------------------------------------------------------------
+        modelo.Entity<Pessoa>().HasIndex(p => p.Matricula).IsUnique();
+        modelo.Entity<Pessoa>().Property(p => p.Matricula).HasMaxLength(10);
+        modelo.Entity<Pessoa>().Property(p => p.NomeCompleto).HasMaxLength(100);
+
+        // Relação 1:1 Pessoa<->Servidor. A FK PessoaId é ÚNICA, o que
+        // garante no banco que uma pessoa tenha no máximo uma ficha de
+        // servidor. Restrict: não apaga a pessoa em cascata pelo papel.
+        modelo.Entity<Servidor>().HasIndex(s => s.PessoaId).IsUnique();
+        modelo.Entity<Servidor>()
+            .HasOne(s => s.Pessoa)
+            .WithOne(p => p.Servidor)
+            .HasForeignKey<Servidor>(s => s.PessoaId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Relação 1:1 Pessoa<->Vereador (mesma lógica).
+        modelo.Entity<Vereador>().HasIndex(v => v.PessoaId).IsUnique();
+        modelo.Entity<Vereador>().Property(v => v.NomeLegislativo).HasMaxLength(100);
+        modelo.Entity<Vereador>()
+            .HasOne(v => v.Pessoa)
+            .WithOne(p => p.Vereador)
+            .HasForeignKey<Vereador>(v => v.PessoaId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // --------------------------------------------------------------
+        // VÍNCULO (exercício temporal do servidor)
+        // --------------------------------------------------------------
+        // FKs para servidor, cargo e regime. Restrict em todas: não se
+        // apaga um cargo/regime/servidor que tenha vínculos atrelados.
+        // Índices nas FKs (são filtráveis e usados em joins).
+        modelo.Entity<Vinculo>().HasIndex(v => v.ServidorId);
+        modelo.Entity<Vinculo>().HasIndex(v => v.CargoId);
+        modelo.Entity<Vinculo>().HasIndex(v => v.RegimeId);
+        modelo.Entity<Vinculo>()
+            .HasOne(v => v.Servidor).WithMany()
+            .HasForeignKey(v => v.ServidorId)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelo.Entity<Vinculo>()
+            .HasOne(v => v.Cargo).WithMany()
+            .HasForeignKey(v => v.CargoId)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelo.Entity<Vinculo>()
+            .HasOne(v => v.Regime).WithMany()
+            .HasForeignKey(v => v.RegimeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // --------------------------------------------------------------
+        // MANDATO (exercício temporal do vereador)
+        // --------------------------------------------------------------
+        modelo.Entity<Mandato>().HasIndex(m => m.VereadorId);
+        modelo.Entity<Mandato>().HasIndex(m => m.LegislaturaId);
+        modelo.Entity<Mandato>()
+            .HasOne(m => m.Vereador).WithMany()
+            .HasForeignKey(m => m.VereadorId)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelo.Entity<Mandato>()
+            .HasOne(m => m.Legislatura).WithMany()
+            .HasForeignKey(m => m.LegislaturaId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // --------------------------------------------------------------
         // QUERY FILTER GLOBAL DE SOFT DELETE (diretriz inegociável)

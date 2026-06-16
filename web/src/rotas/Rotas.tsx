@@ -10,6 +10,7 @@ import { PaginaLegislaturas } from '../paginas/PaginaLegislaturas'
 import { PaginaPartidos } from '../paginas/PaginaPartidos'
 import { PaginaCargos } from '../paginas/PaginaCargos'
 import { PaginaRegimes } from '../paginas/PaginaRegimes'
+import { PaginaPessoas } from '../paginas/PaginaPessoas'
 import { PaginaUsuarios } from '../paginas/PaginaUsuarios'
 import { PaginaAdmin } from '../paginas/PaginaAdmin'
 import { Pagina404 } from '../paginas/Pagina404'
@@ -67,6 +68,7 @@ export function Rotas() {
           <Route path="/partidos" element={<PaginaPartidos />} />
           <Route path="/cargos" element={<PaginaCargos />} />
           <Route path="/regimes" element={<PaginaRegimes />} />
+          <Route path="/pessoas" element={<PaginaPessoas />} />
 
           {/* Sub-árvore que exige o perfil Admin (GuardaPerfil). */}
           <Route element={<GuardaPerfil perfis={['Admin']} />}>

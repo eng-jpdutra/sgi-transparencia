@@ -141,5 +141,22 @@ public static class SemeadorDados
 
             await db.SaveChangesAsync();
         }
+
+        // ---------- Pessoa de teste com fichas de servidor E vereador ----------
+        // Para testar Vínculos e Mandatos, e especialmente a regra de
+        // sobreposição CRUZADA (um mandato não pode coexistir com um
+        // vínculo da mesma pessoa), a pessoa de teste tem as duas fichas.
+        if (!await db.Pessoas.AnyAsync(p => p.Matricula == "9001"))
+        {
+            var pessoaTeste = new Pessoa
+            {
+                NomeCompleto = "Servidor de Teste",
+                Matricula = "9001",
+                Servidor = new Servidor(),
+                Vereador = new Vereador { NomeLegislativo = "Vereador de Teste" },
+            };
+            db.Pessoas.Add(pessoaTeste);
+            await db.SaveChangesAsync();
+        }
     }
 }

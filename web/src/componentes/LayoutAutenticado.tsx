@@ -44,6 +44,9 @@ export function LayoutAutenticado() {
             <Button color="inherit" component={LinkRouter} to="/regimes">
               Regimes
             </Button>
+            <Button color="inherit" component={LinkRouter} to="/pessoas">
+              Pessoas
+            </Button>
             {/* "Usuários" só aparece para Admin — espelha a proteção da
                 rota (GuardaPerfil). Esconder o link é UX; a segurança
                 real é o guarda + o backend. */}
