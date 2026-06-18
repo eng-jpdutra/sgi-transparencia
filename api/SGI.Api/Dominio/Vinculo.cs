@@ -27,6 +27,14 @@ public class Vinculo : EntidadeBase
     public int RegimeId { get; set; }
     public RegimeContratacao? Regime { get; set; }
 
+    /// <summary>
+    /// FK para a matrícula (registro funcional) deste vínculo. 1:1 e
+    /// obrigatória: todo exercício de servidor tem exatamente uma
+    /// matrícula, cujo número é único em todo o sistema (ver Matricula).
+    /// </summary>
+    public int MatriculaId { get; set; }
+    public Matricula? Matricula { get; set; }
+
     /// <summary>Início do exercício.</summary>
     public DateOnly DataInicio { get; set; }
 

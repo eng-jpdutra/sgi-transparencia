@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Alert, Box, Chip, IconButton, Paper, Tooltip, Typography } from '@mui/material'
 import BlockIcon from '@mui/icons-material/Block'
+import RestoreIcon from '@mui/icons-material/Restore'
 import {
   DataGrid, type GridColDef, type GridPaginationModel, type GridSortModel,
 } from '@mui/x-data-grid'
 import { ptBR } from '@mui/x-data-grid/locales'
-import { usarLegislaturas, usarInativarLegislatura } from '../api/usarLegislaturas'
+import { usarLegislaturas, usarInativarLegislatura, usarReativarLegislatura } from '../api/usarLegislaturas'
 import { useDebounce } from '../componentes/useDebounce'
 import { BarraFiltrosLegislatura } from '../componentes/BarraFiltrosLegislatura'
 import { DialogoNovaLegislatura } from './DialogoNovaLegislatura'
@@ -43,6 +44,7 @@ export function PaginaLegislaturas() {
   // ----- Estado dos diálogos -----
   const [dialogoNovaAberto, setDialogoNovaAberto] = useState(false)
   const [aInativar, setAInativar] = useState<Legislatura | null>(null)
+  const [aReativar, setAReativar] = useState<Legislatura | null>(null)
   const [erroAcao, setErroAcao] = useState<string | null>(null)
 
   // ----- Dados e mutação -----
@@ -55,6 +57,20 @@ export function PaginaLegislaturas() {
     descendente: ordenacao[0]?.sort === 'desc',
   })
   const inativar = usarInativarLegislatura()
+  const reativar = usarReativarLegislatura()
+
+  async function confirmarReativacao() {
+    if (!aReativar) return
+    setErroAcao(null)
+    try {
+      await reativar.mutateAsync(aReativar.id)
+      setAReativar(null)
+    } catch (e) {
+      setErroAcao(e instanceof ErroRequisicao
+        ? e.message
+        : 'Não foi possível reativar.')
+    }
+  }
 
   async function confirmarInativacao() {
     if (!aInativar) return
@@ -106,7 +122,14 @@ export function PaginaLegislaturas() {
                 <BlockIcon fontSize="small" />
               </IconButton>
             </Tooltip>
-          ) : null,
+          ) : (
+            <Tooltip title="Reativar">
+              <IconButton size="small" color="success"
+                onClick={() => setAReativar(params.row)}>
+                <RestoreIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          ),
       })
     }
 
@@ -176,6 +199,18 @@ export function PaginaLegislaturas() {
         processando={inativar.isPending}
         aoConfirmar={confirmarInativacao}
         aoCancelar={() => setAInativar(null)}
+      />
+
+      {/* Confirmação de reativação */}
+      <DialogoConfirmacao
+        aberto={aReativar !== null}
+        titulo="Reativar legislatura"
+        mensagem={`Deseja reativar "${aReativar?.nome}"? `
+          + 'Ela voltará a aparecer nas listagens normalmente.'}
+        textoConfirmar="Reativar"
+        processando={reativar.isPending}
+        aoConfirmar={confirmarReativacao}
+        aoCancelar={() => setAReativar(null)}
       />
     </Box>
   )

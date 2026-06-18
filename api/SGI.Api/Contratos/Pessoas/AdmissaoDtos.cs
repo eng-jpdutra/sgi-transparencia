@@ -13,10 +13,14 @@ namespace SGI.Api.Contratos.Pessoas;
 public record AdmissaoEntrada(
     // ----- Dados civis (sempre) -----
     string? NomeCompleto,
-    string? Matricula,
+    string? Cpf,
 
     // ----- Papel escolhido -----
     string? Tipo, // "servidor" | "vereador"
+
+    // ----- Matrícula DO EXERCÍCIO (não da pessoa) -----
+    // O número é único em todo o sistema; nasce junto do vínculo/mandato.
+    string? Matricula,
 
     // ----- Se vereador: nome legislativo da ficha -----
     string? NomeLegislativo,

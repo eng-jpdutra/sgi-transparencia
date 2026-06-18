@@ -49,7 +49,13 @@ public static class SemeadorDados
         }
 
         // ---------- Usuário administrador inicial ------------------
-        var existeAdmin = await db.Usuarios.AnyAsync(u => u.Login == "admin");
+        // IgnoreQueryFilters: a verificação precisa enxergar o login
+        // mesmo que o usuário esteja INATIVO. O índice UNIQUE do banco
+        // vale para ativos e inativos, então checar só entre ativos
+        // levaria a tentar recriar um login que já existe (erro 19).
+        var existeAdmin = await db.Usuarios
+            .IgnoreQueryFilters()
+            .AnyAsync(u => u.Login == "admin");
         if (!existeAdmin)
         {
             var usuarioAdmin = new Usuario
@@ -78,7 +84,9 @@ public static class SemeadorDados
         // Para testar o RBAC: login "consulta", senha provisória
         // "Trocar@123". Sem perfil Admin -> não vê botões de escrita
         // e o backend recusa operações administrativas com 403.
-        var existeConsulta = await db.Usuarios.AnyAsync(u => u.Login == "consulta");
+        var existeConsulta = await db.Usuarios
+            .IgnoreQueryFilters()
+            .AnyAsync(u => u.Login == "consulta");
         if (!existeConsulta)
         {
             var usuarioConsulta = new Usuario
@@ -142,20 +150,49 @@ public static class SemeadorDados
             await db.SaveChangesAsync();
         }
 
-        // ---------- Pessoa de teste com fichas de servidor E vereador ----------
-        // Para testar Vínculos e Mandatos, e especialmente a regra de
-        // sobreposição CRUZADA (um mandato não pode coexistir com um
-        // vínculo da mesma pessoa), a pessoa de teste tem as duas fichas.
-        if (!await db.Pessoas.AnyAsync(p => p.Matricula == "9001"))
+        // ---------- Pessoa de teste: servidora que VIROU vereadora ----------
+        // Demonstra a refatoração: a matrícula é do EXERCÍCIO (não da
+        // pessoa) e é única no sistema. A mesma pessoa tem DUAS matrículas
+        // distintas, em exercícios SEQUENCIAIS (a regra proíbe sobreposição):
+        // foi servidora (vínculo encerrado, mat. 9001) e hoje é vereadora
+        // (mandato em curso, mat. 9002). CPF de teste válido: 111.444.777-35.
+        if (!await db.Pessoas.IgnoreQueryFilters().AnyAsync(p => p.Cpf == "11144477735"))
         {
+            var cargo = await db.Cargos.FirstAsync();
+            var regime = await db.Regimes.FirstAsync();
+            var legislatura = await db.Legislaturas.FirstAsync(l => l.Numero == 22);
+
             var pessoaTeste = new Pessoa
             {
-                NomeCompleto = "Servidor de Teste",
-                Matricula = "9001",
+                NomeCompleto = "Maria de Teste",
+                Cpf = "11144477735",
                 Servidor = new Servidor(),
-                Vereador = new Vereador { NomeLegislativo = "Vereador de Teste" },
+                Vereador = new Vereador { NomeLegislativo = "Maria de Teste" },
             };
             db.Pessoas.Add(pessoaTeste);
+            await db.SaveChangesAsync(); // gera ids da pessoa e das fichas
+
+            // Vínculo de servidora, JÁ ENCERRADO (matrícula 9001).
+            db.Vinculos.Add(new Vinculo
+            {
+                ServidorId = pessoaTeste.Servidor!.Id,
+                CargoId = cargo.Id,
+                RegimeId = regime.Id,
+                Matricula = new Matricula { Numero = "9001" },
+                DataInicio = new DateOnly(2017, 2, 1),
+                DataFim = new DateOnly(2024, 12, 31),
+            });
+
+            // Mandato de vereadora, EM CURSO (matrícula 9002, diferente).
+            db.Mandatos.Add(new Mandato
+            {
+                VereadorId = pessoaTeste.Vereador!.Id,
+                LegislaturaId = legislatura.Id,
+                Matricula = new Matricula { Numero = "9002" },
+                DataInicio = new DateOnly(2025, 1, 1),
+                DataFim = null,
+            });
+
             await db.SaveChangesAsync();
         }
     }

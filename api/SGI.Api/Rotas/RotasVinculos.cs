@@ -47,6 +47,7 @@ public static class RotasVinculos
                 .Include(v => v.Servidor)!.ThenInclude(s => s!.Pessoa)
                 .Include(v => v.Cargo)
                 .Include(v => v.Regime)
+                .Include(v => v.Matricula)
                 .AsQueryable();
 
             if (incluirInativos) consulta = consulta.IgnoreQueryFilters();
@@ -90,6 +91,9 @@ public static class RotasVinculos
                 RegimeId = entrada.RegimeId!.Value,
                 DataInicio = entrada.DataInicio!.Value,
                 DataFim = entrada.DataFim,
+                // A matrícula nasce junto do vínculo (1:1). O EF insere as
+                // duas linhas na mesma operação.
+                Matricula = new Matricula { Numero = entrada.Matricula!.Trim() },
             };
 
             db.Vinculos.Add(vinculo);
@@ -103,10 +107,12 @@ public static class RotasVinculos
         // PUT /vinculos/{id} — editar (somente Admin).
         grupo.MapPut("/{id:int}", async (int id, VinculoEntrada entrada, ContextoDados db) =>
         {
-            var vinculo = await db.Vinculos.FirstOrDefaultAsync(v => v.Id == id);
+            var vinculo = await db.Vinculos
+                .Include(v => v.Matricula)
+                .FirstOrDefaultAsync(v => v.Id == id);
             if (vinculo is null) return Results.NotFound(new { mensagem = "Vínculo não encontrado." });
 
-            var erro = await ValidarAsync(entrada, db, idAtual: id);
+            var erro = await ValidarAsync(entrada, db, idAtual: id, ignorarMatriculaId: vinculo.MatriculaId);
             if (erro is not null) return Results.BadRequest(new { mensagem = erro });
 
             vinculo.ServidorId = entrada.ServidorId!.Value;
@@ -114,6 +120,7 @@ public static class RotasVinculos
             vinculo.RegimeId = entrada.RegimeId!.Value;
             vinculo.DataInicio = entrada.DataInicio!.Value;
             vinculo.DataFim = entrada.DataFim;
+            vinculo.Matricula!.Numero = entrada.Matricula!.Trim();
 
             await db.SaveChangesAsync();
 
@@ -140,20 +147,33 @@ public static class RotasVinculos
         db.Vinculos
             .Include(v => v.Servidor)!.ThenInclude(s => s!.Pessoa)
             .Include(v => v.Cargo)
-            .Include(v => v.Regime);
+            .Include(v => v.Regime)
+            .Include(v => v.Matricula);
 
     /// <summary>Validação compartilhada entre criar e editar (DRY).</summary>
     private static async Task<string?> ValidarAsync(
-        VinculoEntrada entrada, ContextoDados db, int? idAtual)
+        VinculoEntrada entrada, ContextoDados db, int? idAtual, int? ignorarMatriculaId = null)
     {
         if (entrada.ServidorId is null) return "O servidor é obrigatório.";
         if (entrada.CargoId is null) return "O cargo é obrigatório.";
         if (entrada.RegimeId is null) return "O regime de contratação é obrigatório.";
+        if (string.IsNullOrWhiteSpace(entrada.Matricula)) return "A matrícula é obrigatória.";
         if (entrada.DataInicio is null) return "A data de início é obrigatória.";
 
         // Coerência temporal: se há fim, deve ser posterior ao início.
         if (entrada.DataFim is not null && entrada.DataFim <= entrada.DataInicio)
             return "A data de fim deve ser posterior à data de início.";
+
+        // Matrícula única em TODO o sistema. Como vínculos e mandatos
+        // compartilham o espaço de numeração, a checagem é na tabela
+        // Matriculas (que concentra todos os números). IgnoreQueryFilters:
+        // número não é reaproveitado nem após inativação. Na edição,
+        // ignora a própria matrícula do vínculo.
+        var numero = entrada.Matricula.Trim();
+        var numeroDuplicado = await db.Matriculas
+            .IgnoreQueryFilters()
+            .AnyAsync(m => m.Numero == numero && m.Id != ignorarMatriculaId);
+        if (numeroDuplicado) return "Já existe uma matrícula com este número.";
 
         // Referências existem?
         var servidor = await db.Servidores
@@ -187,6 +207,7 @@ public static class RotasVinculos
         v.Cargo!.Nome,
         v.RegimeId,
         v.Regime!.Nome,
+        v.Matricula!.Numero,
         v.DataInicio,
         v.DataFim,
         v.DataFim is null, // vigente

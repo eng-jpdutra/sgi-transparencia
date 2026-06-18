@@ -16,6 +16,7 @@ import { DialogoAdmissao } from './DialogoAdmissao'
 import { DialogoConfirmacao } from '../componentes/DialogoConfirmacao'
 import { useSessao } from '../contextos/useSessao'
 import { ErroRequisicao } from '../api/clienteHttp'
+import { formatarCpf } from '../util/cpf'
 import type { FiltrosPessoa, Pessoa } from '../tipos/pessoa'
 
 /**
@@ -65,7 +66,10 @@ export function PaginaPessoas() {
 
   const colunas = useMemo<GridColDef<Pessoa>[]>(() => {
     const base: GridColDef<Pessoa>[] = [
-      { field: 'matricula', headerName: 'Matrícula', width: 120 },
+      {
+        field: 'cpf', headerName: 'CPF', width: 150,
+        renderCell: (params) => formatarCpf(params.row.cpf),
+      },
       { field: 'nomeCompleto', headerName: 'Nome completo', flex: 1, minWidth: 200 },
       {
         field: 'papeis', headerName: 'Papéis', width: 190, sortable: false,
@@ -115,7 +119,7 @@ export function PaginaPessoas() {
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}
           alignItems={{ sm: 'center' }} sx={{ mb: 2 }}>
           <TextField
-            label="Buscar por nome ou matrícula"
+            label="Buscar por nome ou CPF"
             value={filtros.busca}
             onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })}
             size="small"

@@ -4,6 +4,7 @@ namespace SGI.Api.Contratos.Mandatos;
 public record MandatoEntrada(
     int? VereadorId,
     int? LegislaturaId,
+    string? Matricula,
     DateOnly? DataInicio,
     DateOnly? DataFim);
 
@@ -16,6 +17,7 @@ public record MandatoSaida(
     string NomeLegislativo,
     int LegislaturaId,
     string LegislaturaNome,
+    string Matricula,
     DateOnly DataInicio,
     DateOnly? DataFim,
     bool EmCurso,   // derivado: DataFim == null

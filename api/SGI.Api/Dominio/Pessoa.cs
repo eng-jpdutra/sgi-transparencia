@@ -15,10 +15,14 @@ public class Pessoa : EntidadeBase
     public required string NomeCompleto { get; set; }
 
     /// <summary>
-    /// Matrícula funcional. Obrigatória e única no sistema
-    /// (índice no ContextoDados); campo filtrável na pesquisa.
+    /// CPF — identidade civil ÚNICA da pessoa (índice UNIQUE no
+    /// ContextoDados). Substitui a antiga matrícula como chave natural:
+    /// a matrícula migrou para o registro funcional (ver Matricula),
+    /// pois uma pessoa pode ter várias ao longo do tempo. Armazenado
+    /// normalizado (só dígitos) — é também a chave de deduplicação que
+    /// permite reaproveitar uma pessoa existente na admissão.
     /// </summary>
-    public required string Matricula { get; set; }
+    public required string Cpf { get; set; }
 
     // ----- Papéis (navegações 1:1 opcionais) -----
     // Preenchidas quando a pessoa possui a ficha correspondente.

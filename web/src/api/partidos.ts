@@ -46,3 +46,8 @@ export function editarPartido(id: number, dados: PartidoEntrada): Promise<Partid
 export function inativarPartido(id: number): Promise<void> {
   return requisitar<void>(`/partidos/${id}`, { metodo: 'DELETE' })
 }
+
+/** POST /partidos/{id}/reativar — desfaz o soft delete. */
+export function reativarPartido(id: number): Promise<Partido> {
+  return requisitar<Partido>(`/partidos/${id}/reativar`, { metodo: 'POST' })
+}

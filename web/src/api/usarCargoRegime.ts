@@ -39,5 +39,13 @@ export function criarHooksNome(chave: string, base: string) {
     })
   }
 
-  return { usarLista, usarCriar, usarEditar, usarInativar }
+  function usarReativar() {
+    const cliente = useQueryClient()
+    return useMutation({
+      mutationFn: (id: number) => api.reativar(id),
+      onSuccess: () => cliente.invalidateQueries({ queryKey: [chave] }),
+    })
+  }
+
+  return { usarLista, usarCriar, usarEditar, usarInativar, usarReativar }
 }

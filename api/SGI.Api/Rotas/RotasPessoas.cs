@@ -55,9 +55,15 @@ public static class RotasPessoas
             if (!string.IsNullOrWhiteSpace(busca))
             {
                 var termo = busca.ToLower();
-                consulta = consulta.Where(p =>
-                    p.NomeCompleto.ToLower().Contains(termo) ||
-                    p.Matricula.ToLower().Contains(termo));
+                var termoCpf = Cpf.Normalizar(busca);
+                // Se o termo tem dígitos, busca também por CPF (que é
+                // armazenado normalizado). Sem dígitos, só por nome —
+                // evita que Contains("") na coluna CPF case com tudo.
+                consulta = string.IsNullOrEmpty(termoCpf)
+                    ? consulta.Where(p => p.NomeCompleto.ToLower().Contains(termo))
+                    : consulta.Where(p =>
+                        p.NomeCompleto.ToLower().Contains(termo) ||
+                        p.Cpf.Contains(termoCpf));
             }
 
             // Filtro por papel: quem possui a ficha correspondente.
@@ -72,8 +78,8 @@ public static class RotasPessoas
 
             consulta = (ordenarPor?.ToLower(), descendente) switch
             {
-                ("matricula", false) => consulta.OrderBy(p => p.Matricula),
-                ("matricula", true)  => consulta.OrderByDescending(p => p.Matricula),
+                ("cpf", false) => consulta.OrderBy(p => p.Cpf),
+                ("cpf", true)  => consulta.OrderByDescending(p => p.Cpf),
                 ("nomecompleto", true) => consulta.OrderByDescending(p => p.NomeCompleto),
                 ("ativo", false) => consulta.OrderBy(p => p.Ativo),
                 ("ativo", true)  => consulta.OrderByDescending(p => p.Ativo),
@@ -107,7 +113,7 @@ public static class RotasPessoas
                     servidorId = s.Id,
                     pessoaId = s.PessoaId,
                     nome = s.Pessoa!.NomeCompleto,
-                    matricula = s.Pessoa.Matricula,
+                    cpf = s.Pessoa.Cpf,
                 })
                 .ToListAsync();
 
@@ -172,7 +178,7 @@ public static class RotasPessoas
                 var pessoa = new Pessoa
                 {
                     NomeCompleto = entrada.NomeCompleto!.Trim(),
-                    Matricula = entrada.Matricula!.Trim(),
+                    Cpf = Cpf.Normalizar(entrada.Cpf),
                 };
 
                 if (entrada.EhServidor)
@@ -210,53 +216,73 @@ public static class RotasPessoas
             var erro = await ValidarAdmissaoAsync(entrada, db);
             if (erro is not null) return Results.BadRequest(new { mensagem = erro });
 
+            var cpf = Cpf.Normalizar(entrada.Cpf);
+            var numero = entrada.Matricula!.Trim();
+            var tipo = entrada.Tipo!.ToLower();
+
             await using var transacao = await db.Database.BeginTransactionAsync();
             try
             {
-                // 1) Pessoa (dados civis).
-                var pessoa = new Pessoa
+                // 1) Pessoa — REAPROVEITA por CPF se já existir (ex.: servidor
+                //    eleito vereador, ou vereador aprovado em concurso); senão
+                //    cria. A matrícula NÃO fica na pessoa: é do exercício.
+                var pessoa = await db.Pessoas.FirstOrDefaultAsync(p => p.Cpf == cpf);
+                if (pessoa is null)
                 {
-                    NomeCompleto = entrada.NomeCompleto!.Trim(),
-                    Matricula = entrada.Matricula!.Trim(),
-                };
-                db.Pessoas.Add(pessoa);
-                await db.SaveChangesAsync(); // gera o PessoaId
-
-                var tipo = entrada.Tipo!.ToLower();
+                    pessoa = new Pessoa
+                    {
+                        NomeCompleto = entrada.NomeCompleto!.Trim(),
+                        Cpf = cpf,
+                    };
+                    db.Pessoas.Add(pessoa);
+                    await db.SaveChangesAsync(); // gera o PessoaId
+                }
 
                 if (tipo == "servidor")
                 {
-                    // 2) Ficha de servidor.
-                    var servidor = new Servidor { PessoaId = pessoa.Id };
-                    db.Servidores.Add(servidor);
-                    await db.SaveChangesAsync(); // gera o ServidorId
+                    // 2) Ficha de servidor (reaproveita se a pessoa já tiver).
+                    var servidor = await db.Servidores
+                        .FirstOrDefaultAsync(s => s.PessoaId == pessoa.Id);
+                    if (servidor is null)
+                    {
+                        servidor = new Servidor { PessoaId = pessoa.Id };
+                        db.Servidores.Add(servidor);
+                        await db.SaveChangesAsync(); // gera o ServidorId
+                    }
 
-                    // 3) Vínculo inicial.
+                    // 3) Vínculo inicial + matrícula (1:1, criada junto).
                     db.Vinculos.Add(new Vinculo
                     {
                         ServidorId = servidor.Id,
                         CargoId = entrada.CargoId!.Value,
                         RegimeId = entrada.RegimeId!.Value,
+                        Matricula = new Matricula { Numero = numero },
                         DataInicio = entrada.DataInicio!.Value,
                         DataFim = entrada.DataFim,
                     });
                 }
                 else // vereador
                 {
-                    // 2) Ficha de vereador (com nome legislativo).
-                    var vereador = new Vereador
+                    // 2) Ficha de vereador (reaproveita se já existir).
+                    var vereador = await db.Vereadores
+                        .FirstOrDefaultAsync(v => v.PessoaId == pessoa.Id);
+                    if (vereador is null)
                     {
-                        PessoaId = pessoa.Id,
-                        NomeLegislativo = entrada.NomeLegislativo!.Trim(),
-                    };
-                    db.Vereadores.Add(vereador);
-                    await db.SaveChangesAsync(); // gera o VereadorId
+                        vereador = new Vereador
+                        {
+                            PessoaId = pessoa.Id,
+                            NomeLegislativo = entrada.NomeLegislativo!.Trim(),
+                        };
+                        db.Vereadores.Add(vereador);
+                        await db.SaveChangesAsync(); // gera o VereadorId
+                    }
 
-                    // 3) Mandato inicial.
+                    // 3) Mandato inicial + matrícula (1:1).
                     db.Mandatos.Add(new Mandato
                     {
                         VereadorId = vereador.Id,
                         LegislaturaId = entrada.LegislaturaId!.Value,
+                        Matricula = new Matricula { Numero = numero },
                         DataInicio = entrada.DataInicio!.Value,
                         DataFim = entrada.DataFim,
                     });
@@ -301,7 +327,7 @@ public static class RotasPessoas
             try
             {
                 pessoa.NomeCompleto = entrada.NomeCompleto!.Trim();
-                pessoa.Matricula = entrada.Matricula!.Trim();
+                pessoa.Cpf = Cpf.Normalizar(entrada.Cpf);
 
                 // ----- Ficha de servidor -----
                 if (entrada.EhServidor && pessoa.Servidor is null)
@@ -370,20 +396,20 @@ public static class RotasPessoas
         if (string.IsNullOrWhiteSpace(entrada.NomeCompleto))
             return "O nome completo é obrigatório.";
 
-        if (string.IsNullOrWhiteSpace(entrada.Matricula))
-            return "A matrícula é obrigatória.";
+        if (!Cpf.EhValido(entrada.Cpf))
+            return "CPF inválido.";
 
         // nome_legislativo é obrigatório quando há ficha de vereador.
         if (entrada.EhVereador && string.IsNullOrWhiteSpace(entrada.NomeLegislativo))
             return "O nome legislativo é obrigatório para vereadores.";
 
-        // Matrícula única (Fail Fast antes da constraint).
-        var matricula = entrada.Matricula.Trim().ToLower();
-        var duplicada = await db.Pessoas
+        // CPF único (Fail Fast antes da constraint), comparado normalizado.
+        var cpf = Cpf.Normalizar(entrada.Cpf);
+        var duplicado = await db.Pessoas
             .IgnoreQueryFilters()
-            .AnyAsync(p => p.Matricula.ToLower() == matricula && p.Id != idAtual);
-        if (duplicada)
-            return "Já existe uma pessoa com esta matrícula.";
+            .AnyAsync(p => p.Cpf == cpf && p.Id != idAtual);
+        if (duplicado)
+            return "Já existe uma pessoa com este CPF.";
 
         return null;
     }
@@ -401,15 +427,15 @@ public static class RotasPessoas
         // ----- Dados civis -----
         if (string.IsNullOrWhiteSpace(e.NomeCompleto))
             return "O nome completo é obrigatório.";
+        if (!Cpf.EhValido(e.Cpf))
+            return "CPF inválido.";
+
+        // ----- Matrícula DO EXERCÍCIO (única em todo o sistema) -----
         if (string.IsNullOrWhiteSpace(e.Matricula))
             return "A matrícula é obrigatória.";
-
-        var matricula = e.Matricula.Trim().ToLower();
-        var duplicada = await db.Pessoas
-            .IgnoreQueryFilters()
-            .AnyAsync(p => p.Matricula.ToLower() == matricula);
-        if (duplicada)
-            return "Já existe uma pessoa com esta matrícula.";
+        var numero = e.Matricula.Trim();
+        if (await db.Matriculas.IgnoreQueryFilters().AnyAsync(m => m.Numero == numero))
+            return "Já existe uma matrícula com este número.";
 
         // ----- Tipo de papel -----
         var tipo = e.Tipo?.ToLower();
@@ -441,12 +467,29 @@ public static class RotasPessoas
                 return "Legislatura inválida.";
         }
 
+        // ----- Reaproveitamento de pessoa + não-sobreposição -----
+        // Se já existe pessoa com este CPF, o novo exercício será ANEXADO
+        // a ela. Aí a regra de não-sobreposição passa a importar: o
+        // período não pode coincidir com um vínculo/mandato já existente.
+        var cpf = Cpf.Normalizar(e.Cpf);
+        var pessoa = await db.Pessoas.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Cpf == cpf);
+        if (pessoa is not null)
+        {
+            if (!pessoa.Ativo)
+                return "Existe uma pessoa inativa com este CPF. Reative-a antes de admitir.";
+
+            var erroPeriodo = await ValidadorSobreposicao.ValidarPeriodoLivreAsync(
+                db, pessoa.Id, e.DataInicio.Value, e.DataFim);
+            if (erroPeriodo is not null) return erroPeriodo;
+        }
+
         return null;
     }
     private static PessoaSaida ParaSaida(Pessoa p) => new(
         p.Id,
         p.NomeCompleto,
-        p.Matricula,
+        p.Cpf,
         p.Ativo,
         p.Servidor is null ? null : new PapelSaida(p.Servidor.Id, p.Servidor.Ativo),
         p.Vereador is null ? null

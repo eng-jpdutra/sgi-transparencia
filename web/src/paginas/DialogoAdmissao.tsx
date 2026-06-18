@@ -1,25 +1,29 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField,
   Stack, Alert, Divider, Typography, ToggleButton, ToggleButtonGroup,
   MenuItem,
 } from '@mui/material'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
-import { usarAdmitirPessoa } from '../api/usarPessoas'
+import { usarAdmitirPessoa, usarPessoaPorCpf } from '../api/usarPessoas'
 import {
   usarCargosSelect, usarRegimesSelect, usarLegislaturasSelect,
 } from '../api/usarSelects'
 import { ErroRequisicao } from '../api/clienteHttp'
+import { cpfValido, formatarCpf, normalizarCpf } from '../util/cpf'
 
 /**
- * Diálogo de ADMISSÃO — o fluxo unificado que cria pessoa + ficha de
- * papel + exercício inicial, numa só operação. Os campos do exercício
- * mudam conforme o tipo escolhido:
- *   Servidor -> cargo + regime + datas (vínculo)
- *   Vereador -> nome legislativo + legislatura + datas (mandato)
+ * Diálogo de ADMISSÃO — cria pessoa + ficha de papel + exercício inicial
+ * numa só operação. A matrícula agora é do EXERCÍCIO (não da pessoa), e a
+ * pessoa é identificada pelo CPF.
  *
- * Só CRIAÇÃO (decisão de escopo da fatia). Editar pessoa e gerir
- * vínculos/mandatos terão telas próprias mais adiante.
+ * REAPROVEITAMENTO: ao digitar um CPF já cadastrado, a admissão deixa de
+ * criar pessoa nova e passa a ANEXAR o papel/exercício à pessoa existente
+ * (ex.: servidor eleito vereador). O formulário detecta isso e avisa.
+ *
+ * Campos do exercício mudam conforme o tipo:
+ *   Servidor -> cargo + regime + matrícula + datas (vínculo)
+ *   Vereador -> nome legislativo + legislatura + matrícula + datas (mandato)
  */
 export function DialogoAdmissao({
   aberto,
@@ -29,11 +33,12 @@ export function DialogoAdmissao({
   aoFechar: () => void
 }) {
   // Dados civis
+  const [cpf, setCpf] = useState('')            // só dígitos
   const [nomeCompleto, setNomeCompleto] = useState('')
-  const [matricula, setMatricula] = useState('')
   // Papel
   const [tipo, setTipo] = useState<'servidor' | 'vereador'>('servidor')
   // Exercício
+  const [matricula, setMatricula] = useState('')
   const [cargoId, setCargoId] = useState<number | ''>('')
   const [regimeId, setRegimeId] = useState<number | ''>('')
   const [legislaturaId, setLegislaturaId] = useState<number | ''>('')
@@ -47,21 +52,62 @@ export function DialogoAdmissao({
   const legislaturas = usarLegislaturasSelect()
   const admitir = usarAdmitirPessoa()
 
+  // Busca a pessoa pelo CPF (só dispara com 11 dígitos).
+  const buscaCpf = usarPessoaPorCpf(cpf)
+  const existente = normalizarCpf(cpf).length === 11 ? (buscaCpf.data ?? null) : null
+  const existenteInativa = existente !== null && !existente.ativo
+  const jaTemPapel = tipo === 'servidor' ? !!existente?.servidor : !!existente?.vereador
+
   // Limpa o formulário ao abrir.
   useEffect(() => {
     if (aberto) {
-      setNomeCompleto(''); setMatricula(''); setTipo('servidor')
+      setCpf(''); setNomeCompleto(''); setTipo('servidor'); setMatricula('')
       setCargoId(''); setRegimeId(''); setLegislaturaId('')
       setNomeLegislativo(''); setDataInicio(null); setDataFim(null)
       setErro(null)
     }
   }, [aberto])
 
+  // Pessoa existente encontrada: assume o nome civil dela (não se altera
+  // na admissão) e, se já for vereadora, o nome legislativo da ficha.
+  useEffect(() => {
+    const ex = buscaCpf.data
+    if (ex) {
+      setNomeCompleto(ex.nomeCompleto)
+      if (ex.vereador) setNomeLegislativo(ex.vereador.nomeLegislativo)
+    }
+  }, [buscaCpf.data])
+
+  const avisoExistente = useMemo(() => {
+    if (!existente) return null
+    if (existenteInativa) {
+      return {
+        severidade: 'warning' as const,
+        texto: `Há uma pessoa INATIVA com este CPF (${existente.nomeCompleto}). `
+          + 'Reative-a antes de admitir.',
+      }
+    }
+    return {
+      severidade: 'info' as const,
+      texto: jaTemPapel
+        ? `${existente.nomeCompleto} já tem ficha de ${tipo}. Será adicionado um `
+          + 'NOVO exercício (com nova matrícula) a esta pessoa.'
+        : `CPF já cadastrado: ${existente.nomeCompleto}. Será adicionado o papel `
+          + `de ${tipo} à pessoa existente (o nome civil não muda).`,
+    }
+  }, [existente, existenteInativa, jaTemPapel, tipo])
+
   async function salvar() {
     setErro(null)
 
     // Validações de cliente (espelham o backend).
-    if (!nomeCompleto.trim()) { setErro('O nome completo é obrigatório.'); return }
+    if (!cpfValido(cpf)) { setErro('CPF inválido.'); return }
+    if (existenteInativa) {
+      setErro('Pessoa inativa com este CPF. Reative-a antes de admitir.'); return
+    }
+    if (!existente && !nomeCompleto.trim()) {
+      setErro('O nome completo é obrigatório.'); return
+    }
     if (!matricula.trim()) { setErro('A matrícula é obrigatória.'); return }
     if (!dataInicio) { setErro('A data de início é obrigatória.'); return }
     if (dataFim && dataFim <= dataInicio) {
@@ -76,9 +122,10 @@ export function DialogoAdmissao({
     }
 
     const dados = {
-      nomeCompleto: nomeCompleto.trim(),
-      matricula: matricula.trim(),
+      nomeCompleto: (existente?.nomeCompleto ?? nomeCompleto).trim(),
+      cpf: normalizarCpf(cpf),
       tipo,
+      matricula: matricula.trim(),
       dataInicio: paraIso(dataInicio),
       dataFim: dataFim ? paraIso(dataFim) : null,
       ...(tipo === 'servidor'
@@ -104,17 +151,29 @@ export function DialogoAdmissao({
         <Stack spacing={2} sx={{ mt: 1 }}>
           {/* ----- Dados civis ----- */}
           <TextField
+            label="CPF"
+            value={cpf}
+            onChange={(e) => setCpf(normalizarCpf(e.target.value).slice(0, 11))}
+            fullWidth autoFocus
+            inputProps={{ inputMode: 'numeric' }}
+            helperText={
+              normalizarCpf(cpf).length === 11
+                ? (buscaCpf.isFetching ? 'Verificando CPF…' : formatarCpf(cpf))
+                : 'Somente números. Identifica a pessoa (reaproveita se já existir).'
+            }
+          />
+
+          {avisoExistente && (
+            <Alert severity={avisoExistente.severidade}>{avisoExistente.texto}</Alert>
+          )}
+
+          <TextField
             label="Nome completo"
             value={nomeCompleto}
             onChange={(e) => setNomeCompleto(e.target.value)}
-            fullWidth autoFocus
-          />
-          <TextField
-            label="Matrícula"
-            value={matricula}
-            onChange={(e) => setMatricula(e.target.value.slice(0, 10))}
             fullWidth
-            helperText="Identificação funcional única."
+            disabled={existente !== null}
+            helperText={existente ? 'Nome da pessoa já cadastrada (não editável aqui).' : undefined}
           />
 
           <Divider />
@@ -133,6 +192,15 @@ export function DialogoAdmissao({
             <ToggleButton value="servidor">Servidor</ToggleButton>
             <ToggleButton value="vereador">Vereador</ToggleButton>
           </ToggleButtonGroup>
+
+          {/* ----- Matrícula DO EXERCÍCIO (comum aos dois papéis) ----- */}
+          <TextField
+            label="Matrícula do exercício"
+            value={matricula}
+            onChange={(e) => setMatricula(e.target.value.slice(0, 10))}
+            fullWidth
+            helperText="Número único no sistema; cada exercício (vínculo/mandato) tem a sua."
+          />
 
           {/* ----- Campos do exercício de SERVIDOR ----- */}
           {tipo === 'servidor' && (
@@ -167,6 +235,9 @@ export function DialogoAdmissao({
                 onChange={(e) => setNomeLegislativo(e.target.value)}
                 placeholder="Ex.: Dr. João, Profa. Maria"
                 fullWidth
+                disabled={!!existente?.vereador}
+                helperText={existente?.vereador
+                  ? 'Nome legislativo da ficha já existente.' : undefined}
               />
               <TextField
                 select label="Legislatura" value={legislaturaId}
@@ -208,7 +279,8 @@ export function DialogoAdmissao({
 
       <DialogActions>
         <Button onClick={aoFechar} disabled={admitir.isPending}>Cancelar</Button>
-        <Button variant="contained" onClick={salvar} disabled={admitir.isPending}>
+        <Button variant="contained" onClick={salvar}
+          disabled={admitir.isPending || existenteInativa}>
           {admitir.isPending ? 'Admitindo…' : 'Admitir'}
         </Button>
       </DialogActions>

@@ -33,6 +33,21 @@ export function admitirPessoa(dados: AdmissaoEntrada): Promise<Pessoa> {
   return requisitar<Pessoa>('/pessoas/admissao', { metodo: 'POST', corpo: dados })
 }
 
+/**
+ * Procura uma pessoa pelo CPF (exato). Usa a própria listagem (a busca
+ * server-side já cobre CPF) e filtra o match exato. Inclui inativas para
+ * que a admissão possa avisar "reative antes". Retorna null se não houver.
+ */
+export async function buscarPessoaPorCpf(cpf: string): Promise<Pessoa | null> {
+  const digitos = cpf.replace(/\D/g, '')
+  if (digitos.length !== 11) return null
+  const qs = new URLSearchParams({
+    busca: digitos, tamanhoPagina: '5', incluirInativos: 'true',
+  })
+  const r = await requisitar<ResultadoPaginado<Pessoa>>(`/pessoas?${qs.toString()}`)
+  return r.itens.find((p) => p.cpf === digitos) ?? null
+}
+
 /** DELETE /pessoas/{id} — inativar (soft delete). */
 export function inativarPessoa(id: number): Promise<void> {
   return requisitar<void>(`/pessoas/${id}`, { metodo: 'DELETE' })

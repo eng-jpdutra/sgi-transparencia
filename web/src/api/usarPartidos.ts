@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import {
-  listarPartidos, criarPartido, editarPartido, inativarPartido,
+  listarPartidos, criarPartido, editarPartido, inativarPartido, reativarPartido,
   type ParametrosListagem, type PartidoEntrada,
 } from './partidos'
 
@@ -35,6 +35,14 @@ export function usarInativarPartido() {
   const cliente = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => inativarPartido(id),
+    onSuccess: () => cliente.invalidateQueries({ queryKey: ['partidos'] }),
+  })
+}
+
+export function usarReativarPartido() {
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => reativarPartido(id),
     onSuccess: () => cliente.invalidateQueries({ queryKey: ['partidos'] }),
   })
 }

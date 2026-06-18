@@ -56,3 +56,8 @@ export function criarLegislatura(): Promise<Legislatura> {
 export function inativarLegislatura(id: number): Promise<void> {
   return requisitar<void>(`/legislaturas/${id}`, { metodo: 'DELETE' })
 }
+
+/** POST /legislaturas/{id}/reativar — desfaz o soft delete. */
+export function reativarLegislatura(id: number): Promise<Legislatura> {
+  return requisitar<Legislatura>(`/legislaturas/${id}/reativar`, { metodo: 'POST' })
+}

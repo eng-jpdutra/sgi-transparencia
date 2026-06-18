@@ -164,6 +164,26 @@ public static class RotasLegislaturas
             return Results.NoContent();
         })
         .RequireAuthorization(politica => politica.RequireRole("Admin"));
+
+        // ==============================================================
+        // POST /legislaturas/{id}/reativar — desfaz o soft delete.
+        // Busca IgnoreQueryFilters (o filtro global esconde inativos).
+        // ==============================================================
+        grupo.MapPost("/{id:int}/reativar", async (int id, ContextoDados db) =>
+        {
+            var legislatura = await db.Legislaturas
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(l => l.Id == id);
+
+            if (legislatura is null)
+                return Results.NotFound(new { mensagem = "Legislatura não encontrada." });
+
+            legislatura.Ativo = true;
+            await db.SaveChangesAsync();
+
+            return Results.Ok(ParaSaida(legislatura));
+        })
+        .RequireAuthorization(politica => politica.RequireRole("Admin"));
     }
 
     /// <summary>

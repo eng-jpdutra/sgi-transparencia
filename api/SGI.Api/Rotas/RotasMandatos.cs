@@ -44,6 +44,7 @@ public static class RotasMandatos
                 .AsNoTracking()
                 .Include(m => m.Vereador)!.ThenInclude(v => v!.Pessoa)
                 .Include(m => m.Legislatura)
+                .Include(m => m.Matricula)
                 .AsQueryable();
 
             if (incluirInativos) consulta = consulta.IgnoreQueryFilters();
@@ -86,6 +87,8 @@ public static class RotasMandatos
                 LegislaturaId = entrada.LegislaturaId!.Value,
                 DataInicio = entrada.DataInicio!.Value,
                 DataFim = entrada.DataFim,
+                // Matrícula nova a cada mandato (1:1), criada na mesma operação.
+                Matricula = new Matricula { Numero = entrada.Matricula!.Trim() },
             };
 
             db.Mandatos.Add(mandato);
@@ -99,16 +102,19 @@ public static class RotasMandatos
         // PUT /mandatos/{id} — editar (somente Admin).
         grupo.MapPut("/{id:int}", async (int id, MandatoEntrada entrada, ContextoDados db) =>
         {
-            var mandato = await db.Mandatos.FirstOrDefaultAsync(m => m.Id == id);
+            var mandato = await db.Mandatos
+                .Include(m => m.Matricula)
+                .FirstOrDefaultAsync(m => m.Id == id);
             if (mandato is null) return Results.NotFound(new { mensagem = "Mandato não encontrado." });
 
-            var erro = await ValidarAsync(entrada, db, idAtual: id);
+            var erro = await ValidarAsync(entrada, db, idAtual: id, ignorarMatriculaId: mandato.MatriculaId);
             if (erro is not null) return Results.BadRequest(new { mensagem = erro });
 
             mandato.VereadorId = entrada.VereadorId!.Value;
             mandato.LegislaturaId = entrada.LegislaturaId!.Value;
             mandato.DataInicio = entrada.DataInicio!.Value;
             mandato.DataFim = entrada.DataFim;
+            mandato.Matricula!.Numero = entrada.Matricula!.Trim();
 
             await db.SaveChangesAsync();
 
@@ -133,18 +139,29 @@ public static class RotasMandatos
     private static IQueryable<Mandato> CarregarCompleto(ContextoDados db) =>
         db.Mandatos
             .Include(m => m.Vereador)!.ThenInclude(v => v!.Pessoa)
-            .Include(m => m.Legislatura);
+            .Include(m => m.Legislatura)
+            .Include(m => m.Matricula);
 
     /// <summary>Validação compartilhada entre criar e editar (DRY).</summary>
     private static async Task<string?> ValidarAsync(
-        MandatoEntrada entrada, ContextoDados db, int? idAtual)
+        MandatoEntrada entrada, ContextoDados db, int? idAtual, int? ignorarMatriculaId = null)
     {
         if (entrada.VereadorId is null) return "O vereador é obrigatório.";
         if (entrada.LegislaturaId is null) return "A legislatura é obrigatória.";
+        if (string.IsNullOrWhiteSpace(entrada.Matricula)) return "A matrícula é obrigatória.";
         if (entrada.DataInicio is null) return "A data de início é obrigatória.";
 
         if (entrada.DataFim is not null && entrada.DataFim <= entrada.DataInicio)
             return "A data de fim deve ser posterior à data de início.";
+
+        // Matrícula única em TODO o sistema (espaço compartilhado com os
+        // vínculos). Checagem na tabela Matriculas, com IgnoreQueryFilters
+        // (número não reaproveitado) e ignorando a própria na edição.
+        var numero = entrada.Matricula.Trim();
+        var numeroDuplicado = await db.Matriculas
+            .IgnoreQueryFilters()
+            .AnyAsync(m => m.Numero == numero && m.Id != ignorarMatriculaId);
+        if (numeroDuplicado) return "Já existe uma matrícula com este número.";
 
         var vereador = await db.Vereadores
             .FirstOrDefaultAsync(v => v.Id == entrada.VereadorId);
@@ -171,6 +188,7 @@ public static class RotasMandatos
         m.Vereador.NomeLegislativo,
         m.LegislaturaId,
         m.Legislatura!.Nome,
+        m.Matricula!.Numero,
         m.DataInicio,
         m.DataFim,
         m.DataFim is null, // em curso

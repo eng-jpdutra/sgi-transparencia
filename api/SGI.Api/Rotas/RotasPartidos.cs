@@ -173,6 +173,24 @@ public static class RotasPartidos
             return Results.NoContent();
         })
         .RequireAuthorization(politica => politica.RequireRole("Admin"));
+
+        // POST /partidos/{id}/reativar — desfaz o soft delete.
+        grupo.MapPost("/{id:int}/reativar", async (int id, ContextoDados db) =>
+        {
+            var partido = await db.Partidos
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            if (partido is null)
+                return Results.NotFound(new { mensagem = "Partido não encontrado." });
+
+            partido.Ativo = true;
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new PartidoSaida(
+                partido.Id, partido.Sigla, partido.Nome, partido.Numero, partido.Ativo));
+        })
+        .RequireAuthorization(politica => politica.RequireRole("Admin"));
     }
 
     /// <summary>

@@ -9,6 +9,7 @@ public record VinculoEntrada(
     int? ServidorId,
     int? CargoId,
     int? RegimeId,
+    string? Matricula,
     DateOnly? DataInicio,
     DateOnly? DataFim);
 
@@ -25,6 +26,7 @@ public record VinculoSaida(
     string CargoNome,
     int RegimeId,
     string RegimeNome,
+    string Matricula,
     DateOnly DataInicio,
     DateOnly? DataFim,
     bool Vigente,   // derivado: DataFim == null

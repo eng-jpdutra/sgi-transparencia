@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react'
 import { Alert, Box, Chip, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
 import BlockIcon from '@mui/icons-material/Block'
+import RestoreIcon from '@mui/icons-material/Restore'
 import {
   DataGrid, type GridColDef, type GridPaginationModel, type GridSortModel,
 } from '@mui/x-data-grid'
 import { ptBR } from '@mui/x-data-grid/locales'
-import { usarPartidos, usarInativarPartido } from '../api/usarPartidos'
+import { usarPartidos, usarInativarPartido, usarReativarPartido } from '../api/usarPartidos'
 import { useDebounce } from '../componentes/useDebounce'
 import { BarraFiltrosPartido } from '../componentes/BarraFiltrosPartido'
 import { DialogoPartido } from './DialogoPartido'
@@ -41,6 +42,7 @@ export function PaginaPartidos() {
   const [dialogoAberto, setDialogoAberto] = useState(false)
   const [emEdicao, setEmEdicao] = useState<Partido | null>(null)
   const [aInativar, setAInativar] = useState<Partido | null>(null)
+  const [aReativar, setAReativar] = useState<Partido | null>(null)
   const [erroAcao, setErroAcao] = useState<string | null>(null)
 
   const { data, isLoading, isError, error, isFetching } = usarPartidos({
@@ -52,6 +54,7 @@ export function PaginaPartidos() {
     descendente: ordenacao[0]?.sort === 'desc',
   })
   const inativar = usarInativarPartido()
+  const reativar = usarReativarPartido()
 
   function abrirCriacao() {
     setEmEdicao(null)
@@ -72,6 +75,19 @@ export function PaginaPartidos() {
       setErroAcao(e instanceof ErroRequisicao
         ? e.message
         : 'Não foi possível inativar.')
+    }
+  }
+
+  async function confirmarReativacao() {
+    if (!aReativar) return
+    setErroAcao(null)
+    try {
+      await reativar.mutateAsync(aReativar.id)
+      setAReativar(null)
+    } catch (e) {
+      setErroAcao(e instanceof ErroRequisicao
+        ? e.message
+        : 'Não foi possível reativar.')
     }
   }
 
@@ -99,11 +115,18 @@ export function PaginaPartidos() {
                 <EditIcon fontSize="small" />
               </IconButton>
             </Tooltip>
-            {params.row.ativo && (
+            {params.row.ativo ? (
               <Tooltip title="Inativar">
                 <IconButton size="small" color="error"
                   onClick={() => setAInativar(params.row)}>
                   <BlockIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <Tooltip title="Reativar">
+                <IconButton size="small" color="success"
+                  onClick={() => setAReativar(params.row)}>
+                  <RestoreIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             )}
@@ -177,6 +200,17 @@ export function PaginaPartidos() {
         processando={inativar.isPending}
         aoConfirmar={confirmarInativacao}
         aoCancelar={() => setAInativar(null)}
+      />
+
+      <DialogoConfirmacao
+        aberto={aReativar !== null}
+        titulo="Reativar partido"
+        mensagem={`Deseja reativar "${aReativar?.sigla} - ${aReativar?.nome}"? `
+          + 'Ele voltará a aparecer nas listagens e poderá ser usado normalmente.'}
+        textoConfirmar="Reativar"
+        processando={reativar.isPending}
+        aoConfirmar={confirmarReativacao}
+        aoCancelar={() => setAReativar(null)}
       />
     </Box>
   )

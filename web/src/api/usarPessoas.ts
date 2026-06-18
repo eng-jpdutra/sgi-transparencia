@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import {
-  listarPessoas, admitirPessoa, inativarPessoa, type ParametrosListagem,
+  listarPessoas, admitirPessoa, inativarPessoa, buscarPessoaPorCpf,
+  type ParametrosListagem,
 } from './pessoas'
 import type { AdmissaoEntrada } from '../tipos/pessoa'
 
@@ -10,6 +11,20 @@ export function usarPessoas(params: ParametrosListagem) {
     queryKey: ['pessoas', params],
     queryFn: () => listarPessoas(params),
     placeholderData: keepPreviousData,
+  })
+}
+
+/**
+ * Busca uma pessoa por CPF (habilitada só quando há 11 dígitos).
+ * Alimenta o reaproveitamento de cadastro na admissão.
+ */
+export function usarPessoaPorCpf(cpf: string) {
+  const digitos = cpf.replace(/\D/g, '')
+  return useQuery({
+    queryKey: ['pessoa-por-cpf', digitos],
+    queryFn: () => buscarPessoaPorCpf(digitos),
+    enabled: digitos.length === 11,
+    staleTime: 30 * 1000,
   })
 }
 

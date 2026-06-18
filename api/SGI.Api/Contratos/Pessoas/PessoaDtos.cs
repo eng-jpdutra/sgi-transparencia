@@ -9,7 +9,7 @@ namespace SGI.Api.Contratos.Pessoas;
 /// </summary>
 public record PessoaEntrada(
     string? NomeCompleto,
-    string? Matricula,
+    string? Cpf,
     bool EhServidor,
     bool EhVereador,
     string? NomeLegislativo);
@@ -27,7 +27,7 @@ public record VereadorSaida(int Id, bool Ativo, string NomeLegislativo);
 public record PessoaSaida(
     int Id,
     string NomeCompleto,
-    string Matricula,
+    string Cpf,
     bool Ativo,
     PapelSaida? Servidor,
     VereadorSaida? Vereador);

@@ -37,6 +37,7 @@ public class ContextoDados : DbContext
     public DbSet<Pessoa> Pessoas => Set<Pessoa>();
     public DbSet<Servidor> Servidores => Set<Servidor>();
     public DbSet<Vereador> Vereadores => Set<Vereador>();
+    public DbSet<Matricula> Matriculas => Set<Matricula>();
     public DbSet<Vinculo> Vinculos => Set<Vinculo>();
     public DbSet<Mandato> Mandatos => Set<Mandato>();
 
@@ -115,9 +116,22 @@ public class ContextoDados : DbContext
         // --------------------------------------------------------------
         // PESSOA + papéis (SERVIDOR, VEREADOR)
         // --------------------------------------------------------------
-        modelo.Entity<Pessoa>().HasIndex(p => p.Matricula).IsUnique();
-        modelo.Entity<Pessoa>().Property(p => p.Matricula).HasMaxLength(10);
+        // CPF é a chave natural civil: único (ativos+inativos), 11 dígitos
+        // (armazenado normalizado), filtrável na pesquisa -> indexado.
+        modelo.Entity<Pessoa>().HasIndex(p => p.Cpf).IsUnique();
+        modelo.Entity<Pessoa>().Property(p => p.Cpf).HasMaxLength(11);
         modelo.Entity<Pessoa>().Property(p => p.NomeCompleto).HasMaxLength(100);
+
+        // --------------------------------------------------------------
+        // MATRICULA (registro funcional) — número ÚNICO GLOBAL
+        // --------------------------------------------------------------
+        // A unicidade do número vive aqui, numa tabela só, porque é uma
+        // regra CRUZADA entre Vínculo e Mandato (espaço de numeração
+        // compartilhado). Um índice por tabela não cobriria isso; este
+        // índice único, sim. Vale para ativos+inativos (número não é
+        // reaproveitado) -> checagens usam IgnoreQueryFilters().
+        modelo.Entity<Matricula>().HasIndex(m => m.Numero).IsUnique();
+        modelo.Entity<Matricula>().Property(m => m.Numero).HasMaxLength(10);
 
         // Relação 1:1 Pessoa<->Servidor. A FK PessoaId é ÚNICA, o que
         // garante no banco que uma pessoa tenha no máximo uma ficha de
@@ -160,6 +174,15 @@ public class ContextoDados : DbContext
             .HasForeignKey(v => v.RegimeId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // 1:1 Vínculo<->Matrícula. A FK MatriculaId no lado do vínculo é
+        // única (o EF cria o índice unique automaticamente no 1:1), o que
+        // garante que uma matrícula identifica no máximo um vínculo.
+        // Restrict: não se apaga a matrícula em cascata pelo vínculo.
+        modelo.Entity<Vinculo>()
+            .HasOne(v => v.Matricula).WithOne(m => m.Vinculo)
+            .HasForeignKey<Vinculo>(v => v.MatriculaId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // --------------------------------------------------------------
         // MANDATO (exercício temporal do vereador)
         // --------------------------------------------------------------
@@ -172,6 +195,12 @@ public class ContextoDados : DbContext
         modelo.Entity<Mandato>()
             .HasOne(m => m.Legislatura).WithMany()
             .HasForeignKey(m => m.LegislaturaId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // 1:1 Mandato<->Matrícula (mesma lógica do vínculo).
+        modelo.Entity<Mandato>()
+            .HasOne(m => m.Matricula).WithOne(mt => mt.Mandato)
+            .HasForeignKey<Mandato>(m => m.MatriculaId)
             .OnDelete(DeleteBehavior.Restrict);
 
         // --------------------------------------------------------------

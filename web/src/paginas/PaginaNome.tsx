@@ -6,6 +6,7 @@ import {
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import BlockIcon from '@mui/icons-material/Block'
+import RestoreIcon from '@mui/icons-material/Restore'
 import SearchIcon from '@mui/icons-material/Search'
 import {
   DataGrid, type GridColDef, type GridPaginationModel, type GridSortModel,
@@ -48,6 +49,7 @@ export function PaginaNome({
   const [dialogoAberto, setDialogoAberto] = useState(false)
   const [emEdicao, setEmEdicao] = useState<ItemNome | null>(null)
   const [aInativar, setAInativar] = useState<ItemNome | null>(null)
+  const [aReativar, setAReativar] = useState<ItemNome | null>(null)
   const [erroAcao, setErroAcao] = useState<string | null>(null)
 
   const { data, isLoading, isError, error, isFetching } = hooks.usarLista({
@@ -61,6 +63,7 @@ export function PaginaNome({
   const criar = hooks.usarCriar()
   const editar = hooks.usarEditar()
   const inativar = hooks.usarInativar()
+  const reativar = hooks.usarReativar()
 
   async function confirmarInativacao() {
     if (!aInativar) return
@@ -70,6 +73,17 @@ export function PaginaNome({
       setAInativar(null)
     } catch (e) {
       setErroAcao(e instanceof ErroRequisicao ? e.message : 'Não foi possível inativar.')
+    }
+  }
+
+  async function confirmarReativacao() {
+    if (!aReativar) return
+    setErroAcao(null)
+    try {
+      await reativar.mutateAsync(aReativar.id)
+      setAReativar(null)
+    } catch (e) {
+      setErroAcao(e instanceof ErroRequisicao ? e.message : 'Não foi possível reativar.')
     }
   }
 
@@ -94,10 +108,16 @@ export function PaginaNome({
                 <EditIcon fontSize="small" />
               </IconButton>
             </Tooltip>
-            {params.row.ativo && (
+            {params.row.ativo ? (
               <Tooltip title="Inativar">
                 <IconButton size="small" color="error" onClick={() => setAInativar(params.row)}>
                   <BlockIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <Tooltip title="Reativar">
+                <IconButton size="small" color="success" onClick={() => setAReativar(params.row)}>
+                  <RestoreIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             )}
@@ -195,6 +215,17 @@ export function PaginaNome({
         processando={inativar.isPending}
         aoConfirmar={confirmarInativacao}
         aoCancelar={() => setAInativar(null)}
+      />
+
+      <DialogoConfirmacao
+        aberto={aReativar !== null}
+        titulo={`Reativar ${rotulo}`}
+        mensagem={`Deseja reativar "${aReativar?.nome}"? `
+          + 'Ele voltará a aparecer nas listagens e poderá ser usado normalmente.'}
+        textoConfirmar="Reativar"
+        processando={reativar.isPending}
+        aoConfirmar={confirmarReativacao}
+        aoCancelar={() => setAReativar(null)}
       />
     </Box>
   )

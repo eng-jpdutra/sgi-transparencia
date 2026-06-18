@@ -113,6 +113,20 @@ public static class RotasCargos
             return Results.NoContent();
         })
         .RequireAuthorization(p => p.RequireRole("Admin"));
+
+        // POST /cargos/{id}/reativar — desfaz o soft delete.
+        grupo.MapPost("/{id:int}/reativar", async (int id, ContextoDados db) =>
+        {
+            var cargo = await db.Cargos
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(c => c.Id == id);
+            if (cargo is null) return Results.NotFound(new { mensagem = "Cargo não encontrado." });
+
+            cargo.Ativo = true;
+            await db.SaveChangesAsync();
+            return Results.Ok(new CargoSaida(cargo.Id, cargo.Nome, cargo.Ativo));
+        })
+        .RequireAuthorization(p => p.RequireRole("Admin"));
     }
 
     private static async Task<string?> ValidarAsync(

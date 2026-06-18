@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import {
   listarLegislaturas, obterProximaLegislatura, criarLegislatura, inativarLegislatura,
+  reativarLegislatura,
   type ParametrosListagem,
 } from './legislaturas'
 
@@ -47,6 +48,17 @@ export function usarInativarLegislatura() {
   const cliente = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => inativarLegislatura(id),
+    onSuccess: () => {
+      cliente.invalidateQueries({ queryKey: ['legislaturas'] })
+    },
+  })
+}
+
+/** Reativa uma legislatura; ao concluir, atualiza a listagem. */
+export function usarReativarLegislatura() {
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => reativarLegislatura(id),
     onSuccess: () => {
       cliente.invalidateQueries({ queryKey: ['legislaturas'] })
     },

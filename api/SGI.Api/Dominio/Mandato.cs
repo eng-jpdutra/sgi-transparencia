@@ -22,6 +22,14 @@ public class Mandato : EntidadeBase
     public int LegislaturaId { get; set; }
     public Legislatura? Legislatura { get; set; }
 
+    /// <summary>
+    /// FK para a matrícula (registro funcional) deste mandato. 1:1 e
+    /// obrigatória. Cada mandato gera uma matrícula nova (vereador
+    /// reeleito recebe outra), e o número é único em todo o sistema.
+    /// </summary>
+    public int MatriculaId { get; set; }
+    public Matricula? Matricula { get; set; }
+
     /// <summary>Início do exercício do mandato.</summary>
     public DateOnly DataInicio { get; set; }
 

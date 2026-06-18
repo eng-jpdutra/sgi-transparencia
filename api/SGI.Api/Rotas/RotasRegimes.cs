@@ -113,6 +113,20 @@ public static class RotasRegimes
             return Results.NoContent();
         })
         .RequireAuthorization(p => p.RequireRole("Admin"));
+
+        // POST /regimes/{id}/reativar — desfaz o soft delete.
+        grupo.MapPost("/{id:int}/reativar", async (int id, ContextoDados db) =>
+        {
+            var regime = await db.Regimes
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(r => r.Id == id);
+            if (regime is null) return Results.NotFound(new { mensagem = "Regime não encontrado." });
+
+            regime.Ativo = true;
+            await db.SaveChangesAsync();
+            return Results.Ok(new RegimeSaida(regime.Id, regime.Nome, regime.Ativo));
+        })
+        .RequireAuthorization(p => p.RequireRole("Admin"));
     }
 
     private static async Task<string?> ValidarAsync(

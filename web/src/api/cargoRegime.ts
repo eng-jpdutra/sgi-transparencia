@@ -41,6 +41,9 @@ export function criarApiNome(base: string) {
     inativar(id: number): Promise<void> {
       return requisitar<void>(`${base}/${id}`, { metodo: 'DELETE' })
     },
+    reativar(id: number): Promise<ItemNome> {
+      return requisitar<ItemNome>(`${base}/${id}/reativar`, { metodo: 'POST' })
+    },
   }
 }
 

@@ -15,7 +15,7 @@ export interface PapelVereador {
 export interface Pessoa {
   id: number
   nomeCompleto: string
-  matricula: string
+  cpf: string
   ativo: boolean
   servidor: Papel | null
   vereador: PapelVereador | null
@@ -39,8 +39,9 @@ export interface FiltrosPessoa {
 /** Dados da ADMISSÃO unificada (espelha AdmissaoEntrada.cs). */
 export interface AdmissaoEntrada {
   nomeCompleto: string
-  matricula: string
+  cpf: string              // identidade civil (só dígitos)
   tipo: 'servidor' | 'vereador'
+  matricula: string        // matrícula DO EXERCÍCIO (única no sistema)
   nomeLegislativo?: string
   cargoId?: number
   regimeId?: number
